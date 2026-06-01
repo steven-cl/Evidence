@@ -23,7 +23,7 @@ def main():
     
     # Initial values set by the team
     camera.pos_x = 0.0 
-    camera.pos_y = 5.0  # Initial viewing height
+    camera.pos_y = 1.0  # Initial viewing height
     camera.pos_z = 1.0   
     camera.pitch = -45.0  # Looking down initially
     camera.yaw = -90.0   # Standard forward-facing orientation
@@ -35,7 +35,7 @@ def main():
     glEnable(GL_DEPTH_TEST)
 
     # 4. Instantiate the house model
-    house = Model3D('source/models/RenewHouse.obj', scale=3.0, texture_filename='house_wall.jpg')
+    house = Model3D('source/models/RenewHouse.obj', scale=1.0, texture_filename='house_wall.jpg')
 
     clock = pygame.time.Clock()
     running = True
@@ -43,8 +43,8 @@ def main():
     # 5. Main loop
     while running:
         # Compute Delta Time in seconds (e.g., at 60 FPS, dt ~= 0.0166)
-        # Calculamos dt, pero si el juego se congela (ej. dt > 0.05 segs), 
-        # obligamos al dt a ser como máximo 0.05 para que la física no se rompa.
+        # We calculate dt, but if the game freezes (e.g., dt > 0.05 sec),
+        # we clamp dt to at most 0.05 so physics does not break.
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05)
 

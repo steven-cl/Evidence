@@ -33,9 +33,9 @@ class CameraFPS:
         # --- NUEVOS PARÁMETROS DE FÍSICA ---
         self.velocity_y = 0.0
         self.gravity = 9.8
-        self.radius = 0.32 * 3.0        # Grosor del detective
-        self.eye_height = 1.65 * 3.0    # Altura de los ojos
-        self.speed = 4.0 * 3.0        # Ahora caminamos más rápido (12.0)
+        self.radius = 0.32        # Detective thickness
+        self.eye_height = 1.65    # Eye height
+        self.speed = 4.0        # Walk faster now (12.0)
 
         # Update initial view vectors
         self.update_camera_vectors()
@@ -110,27 +110,27 @@ class CameraFPS:
         is_ceiling = tri.normal.y <= -0.5
         
         if is_wall:
-            # SI ES PARED: Colisión de DOBLE CARA
+            # IF IT IS A WALL: two-sided collision
             if abs(dist) > self.radius:
                 return None
         else:
-            # --- LA CURA CONTRA LAS EXPLOSIONES FÍSICAS ---
+            # --- THE FIX FOR PHYSICS EXPLOSIONS ---
             if is_floor:
-                # Solo los PIES interactúan con los pisos.
-                # Evita que tu cintura o cabeza te "aspiren" hacia arriba de la mesa.
+                # Only the FEET interact with floors.
+                # Prevents your waist or head from being "pulled" up onto the table.
                 if sphere_type != 'feet':
                     return None
                 
-                # Tolerancia para caídas (lag)
+                # Tolerance for falls (lag)
                 if dist > self.radius or dist < -0.6:
                     return None
             
             elif is_ceiling:
-                # Solo la CABEZA interactúa con los techos.
+                # Only the HEAD interacts with ceilings.
                 if sphere_type != 'head':
                     return None
                 
-                # No interactuar si estamos por encima del techo
+                # Do not interact if we are above the ceiling
                 if dist > self.radius or dist < 0:
                     return None
                 

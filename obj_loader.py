@@ -7,33 +7,33 @@ from OpenGL.GL import *
 
 def load_texture(image_path):
     """
-    Carga una imagen con Pygame y la convierte en una textura de OpenGL.
+    Loads an image with Pygame and converts it into an OpenGL texture.
     """
     try:
-        # Cargar la imagen
+        # Load the image
         texture_surface = pygame.image.load(image_path)
         
-        # Extraer los datos de píxeles. 
-        # El 'True' al final invierte la imagen verticalmente, ya que OpenGL y Pygame 
-        # leen el eje Y de las imágenes al revés.
+        # Extract pixel data.
+        # The 'True' at the end flips the image vertically, since OpenGL and Pygame
+        # interpret image Y axes in opposite directions.
         texture_data = pygame.image.tobytes(texture_surface, "RGBA", True)
         width = texture_surface.get_width()
         height = texture_surface.get_height()
 
-        # Generar un ID de textura en OpenGL
+        # Generate an OpenGL texture ID
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)
 
-        # Configurar cómo se escala la textura (Filtro Lineal para que no se vea pixelada)
+        # Configure how the texture is scaled (linear filter to avoid pixelation)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
-        # Enviar la imagen a la tarjeta gráfica
+        # Send the image to the graphics card
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
         
         return tex_id
     except Exception as e:
-        print(f"Error cargando la textura {image_path}: {e}")
+        print(f"Error loading texture {image_path}: {e}")
         return None
 
 class Triangle:
@@ -43,8 +43,8 @@ class Triangle:
         self.c = glm.vec3(v3)
         self.normal = glm.normalize(glm.cross(self.b - self.a, self.c - self.a))
         
-        # Pre-calculamos los límites espaciales del triángulo con un margen
-        margen = 1.0 # Margen de seguridad
+        # Precompute the triangle spatial bounds with a margin
+        margen = 1.0 # Safety margin
         self.min_x = min(self.a.x, self.b.x, self.c.x) - margen
         self.max_x = max(self.a.x, self.b.x, self.c.x) + margen
         self.min_y = min(self.a.y, self.b.y, self.c.y) - margen
@@ -53,7 +53,7 @@ class Triangle:
         self.max_z = max(self.a.z, self.b.z, self.c.z) + margen
 
 class Model3D:
-    # NUEVO: Añadimos 'texture_filename' con valor por defecto None
+    # NEW: Add 'texture_filename' with default value None
     def __init__(self, file_route, scale=1.0, texture_filename=None):
         print(f"Loading model from {file_route}...")
         self.scene = pywavefront.Wavefront(file_route, collect_faces=True)
@@ -61,14 +61,14 @@ class Model3D:
         self.meshes = []
         self.colliders = [] 
         
-        # Cargamos la textura global para este modelo una sola vez
+        # Load the global texture for this model only once
         self.global_texture_id = None
         if texture_filename:
-            # Forzamos a que busque en la carpeta 'source/textures'
+            # Force it to look in the 'source/textures' folder
             tex_path = os.path.join("source", "textures", texture_filename)
             self.global_texture_id = load_texture(tex_path)
             if self.global_texture_id:
-                print(f"Textura {texture_filename} aplicada exitosamente al modelo.")
+                print(f"Texture {texture_filename} successfully applied to the model.")
         
         for name, material in self.scene.materials.items():
             v = material.vertices
@@ -97,24 +97,24 @@ class Model3D:
                 'gl_format': gl_format
             })
 
-            # Generar colisiones
+            # Generate collisions
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])
                 v2 = (v[i + stride * 2 - 3], v[i + stride * 2 - 2], v[i + stride * 2 - 1])
                 v3 = (v[i + stride * 3 - 3], v[i + stride * 3 - 2], v[i + stride * 3 - 1])
                 self.colliders.append(Triangle(v1, v2, v3))
             
-        print(f"Model loaded! Polígonos de colisión generados: {len(self.colliders)}")
+        print(f"Model loaded! Collision polygons generated: {len(self.colliders)}")
 
     def draw(self):
-        # Habilitar el uso de arreglos y de texturas 2D
+        # Enable array and 2D texture usage
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnable(GL_TEXTURE_2D)
         
-        # Para que el color blanco por defecto no tiña nuestra textura
+        # Prevent the default white color from tinting our texture
         glColor3f(1.0, 1.0, 1.0) 
         
-        # Vinculamos la textura manual (si existe) ANTES de dibujar todo
+        # Bind the manual texture (if any) BEFORE drawing everything
         if self.global_texture_id is not None:
             glBindTexture(GL_TEXTURE_2D, self.global_texture_id)
         else:
@@ -124,6 +124,6 @@ class Model3D:
             glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
             glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
             
-        # Apagamos estados al terminar de dibujar
+        # Disable states when finished drawing
         glDisable(GL_TEXTURE_2D)
         glDisableClientState(GL_VERTEX_ARRAY)
