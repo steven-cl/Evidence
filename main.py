@@ -45,7 +45,7 @@ def main():
     glEnable(GL_DEPTH_TEST)
 
     # 4. Instantiate the house model
-    house = Model3D('source/models/HouseForGame.obj')
+    house = Model3D('source/models/RenewHouse.obj')
 
     clock = pygame.time.Clock()
     running = True
@@ -89,7 +89,7 @@ def main():
         
         # 7. Draw the house model (scaled up for better visibility)
         glPushMatrix()
-        glScalef(3.0, 3.0, 3.0)
+        #glScalef(3.0, 3.0, 3.0)
         house.draw()
         glPopMatrix()
 
