@@ -89,7 +89,7 @@ def main():
         
         # 7. Draw the house model (scaled up for better visibility)
         glPushMatrix()
-        #glScalef(3.0, 3.0, 3.0)
+        glScalef(3.0, 3.0, 3.0)
         house.draw()
         glPopMatrix()
 
