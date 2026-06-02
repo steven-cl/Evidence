@@ -30,7 +30,7 @@ class CameraFPS:
         self.speed = 4.0        # Detective walking speed
         self.sensitivity = 0.1  # Mouse sensitivity
         
-        # --- NUEVOS PARÁMETROS DE FÍSICA ---
+        # --- PHYSICS PARAMETERS ---
         self.velocity_y = 0.0
         self.gravity = 9.8
         self.radius = 0.32        # Detective thickness
@@ -95,16 +95,16 @@ class CameraFPS:
         self.update_camera_vectors()
         
     def check_sphere_triangle(self, sphere_center, tri, sphere_type):
-        # 1. EARLY OUT (Optimización para no perder FPS)
+        # 1. EARLY OUT (Optimization to not lose FPS)
         if (sphere_center.x < tri.min_x or sphere_center.x > tri.max_x or
             sphere_center.y < tri.min_y or sphere_center.y > tri.max_y or
             sphere_center.z < tri.min_z or sphere_center.z > tri.max_z):
             return None
 
-        # 2. Distancia al plano (con signo)
+        # 2. Distance to plane (with sign)
         dist = glm.dot(sphere_center - tri.a, tri.normal)
         
-        # Detectamos si es pared (vertical) o piso/techo (horizontal)
+        # Detect if it is wall (vertical) or floor/ceiling (horizontal)
         is_wall = abs(tri.normal.y) < 0.5
         is_floor = tri.normal.y >= 0.5
         is_ceiling = tri.normal.y <= -0.5
@@ -134,10 +134,10 @@ class CameraFPS:
                 if dist > self.radius or dist < 0:
                     return None
                 
-        # 3. Proyectar el centro sobre el plano
+        # 3. Project the center onto the plane
         projected = sphere_center - (tri.normal * dist)
         
-        # 4. Comprobación Baricéntrica (Dentro de los bordes del triángulo)
+        # 4. Barycentric Check (Inside the triangle's edges)
         edge0 = tri.b - tri.a
         edge1 = tri.c - tri.b
         edge2 = tri.a - tri.c
@@ -150,13 +150,13 @@ class CameraFPS:
             glm.dot(tri.normal, glm.cross(edge1, c1)) >= 0 and
             glm.dot(tri.normal, glm.cross(edge2, c2)) >= 0):
             
-            # 5. EMPUJE FÍSICO
+            # 5. PHYSICS PUSH
             if is_wall and dist < 0:
-                # Si chocamos contra la espalda de una pared, empujamos hacia afuera
+                # If we collide with the back of a wall, push outward
                 penetration = self.radius - abs(dist)
                 return -tri.normal * penetration
             else:
-                # Chocamos de frente (o es piso/techo)
+                # We collide head-on (or it is floor/ceiling)
                 penetration = self.radius - dist
                 return tri.normal * penetration
                 
@@ -166,7 +166,7 @@ class CameraFPS:
         keys = pygame.key.get_pressed()
         velocity = self.speed * dt
 
-        # 1. Movimiento Predictivo
+        # 1. Predictive Movement
         next_x = self.pos_x
         next_z = self.pos_z
 
@@ -187,17 +187,17 @@ class CameraFPS:
         next_y = self.pos_y + (self.velocity_y * dt)
 
         # ---------------------------------------------------------
-        # 2. EL MUÑECO DE NIEVE COMPLETO (3 Esferas)
+        # 2. COMPLETE SNOWMAN (3 Spheres)
         # ---------------------------------------------------------
         feet_pos = glm.vec3(next_x, next_y - self.eye_height + self.radius, next_z)
         torso_pos = glm.vec3(next_x, next_y - (self.eye_height / 2), next_z)
         head_pos = glm.vec3(next_x, next_y, next_z)
 
-        # 3. Calculamos la física pasando el "Rol" de cada esfera
+        # 3. Calculate physics by passing the "Role" of each sphere
         is_grounded = False
         
         for tri in colliders:
-            # Evaluar Pies (Pasamos 'feet')
+            # Evaluate Feet (Passing 'feet')
             push_feet = self.check_sphere_triangle(feet_pos, tri, 'feet')
             if push_feet is not None:
                 feet_pos += push_feet
@@ -207,21 +207,21 @@ class CameraFPS:
                     is_grounded = True
                     self.velocity_y = 0.0
 
-            # Evaluar Torso (Pasamos 'torso')
+            # Evaluate Torso (Passing 'torso')
             push_torso = self.check_sphere_triangle(torso_pos, tri, 'torso')
             if push_torso is not None:
                 feet_pos += push_torso
                 torso_pos += push_torso
                 head_pos += push_torso
 
-            # Evaluar Cabeza (Pasamos 'head')
+            # Evaluate Head (Passing 'head')
             push_head = self.check_sphere_triangle(head_pos, tri, 'head')
             if push_head is not None:
                 feet_pos += push_head
                 torso_pos += push_head
                 head_pos += push_head
 
-        # 4. APLICAMOS el movimiento
+        # 4. APPLY the movement
         self.pos_x = feet_pos.x
         self.pos_z = feet_pos.z
         self.pos_y = feet_pos.y + self.eye_height - self.radius

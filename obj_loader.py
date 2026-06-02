@@ -44,13 +44,13 @@ class Triangle:
         self.normal = glm.normalize(glm.cross(self.b - self.a, self.c - self.a))
         
         # Precompute the triangle spatial bounds with a margin
-        margen = 1.0 # Safety margin
-        self.min_x = min(self.a.x, self.b.x, self.c.x) - margen
-        self.max_x = max(self.a.x, self.b.x, self.c.x) + margen
-        self.min_y = min(self.a.y, self.b.y, self.c.y) - margen
-        self.max_y = max(self.a.y, self.b.y, self.c.y) + margen
-        self.min_z = min(self.a.z, self.b.z, self.c.z) - margen
-        self.max_z = max(self.a.z, self.b.z, self.c.z) + margen
+        margin = 1.0 # Safety margin
+        self.min_x = min(self.a.x, self.b.x, self.c.x) - margin
+        self.max_x = max(self.a.x, self.b.x, self.c.x) + margin
+        self.min_y = min(self.a.y, self.b.y, self.c.y) - margin
+        self.max_y = max(self.a.y, self.b.y, self.c.y) + margin
+        self.min_z = min(self.a.z, self.b.z, self.c.z) - margin
+        self.max_z = max(self.a.z, self.b.z, self.c.z) + margin
 
 class Model3D:
     # NEW: Add 'texture_filename' with default value None
