@@ -8,6 +8,26 @@ from obj_loader import Model3D
 from camera import CameraFPS
 from skybox import Skybox
 
+def setup_fog():
+    """Configure the global fog parameters in OpenGL"""
+    glEnable(GL_FOG)  # Enable fog rendering
+    glFogf(GL_FOG_START, 5.0)   # The fog starts at 5 meters from the camera
+    glFogf(GL_FOG_END, 18.0)    # The fog fully obscures objects at 18 meters or more, creating a sense of depth and mystery
+    
+    # 1. Define the mathematical mode (GL_EXP2 gives an excellent atmosphere of mystery)
+    glFogi(GL_FOG_MODE, GL_EXP2)
+    
+    # 2. Define the density (Values between 0.01 and 0.1 control how fast the fog thickens)
+    glFogf(GL_FOG_DENSITY, 0.03)
+    
+    # 3. Define the fog color (R, G, B, A)
+    # We will use a dark grayish-blue to maintain the nocturnal and mysterious atmosphere
+    fog_color = [0.1, 0.1, 0.15, 1.0]
+    glFogfv(GL_FOG_COLOR, fog_color)
+    
+    # 4. Quality of the calculation (GL_NICEST evaluates the fog by pixel, not by vertex)
+    glHint(GL_FOG_HINT, GL_NICEST)
+
 def main():
     # 1. Window setup
     pygame.init()
@@ -44,11 +64,16 @@ def main():
     # 3. Enable depth testing
     glEnable(GL_DEPTH_TEST)
 
+    # Initialize the fog
+    setup_fog()
+
     # 4. Instantiate the house model
     house = Model3D('source/models/RenewHouse.obj')
 
     clock = pygame.time.Clock()
     running = True
+
+    glClearColor(0.1, 0.1, 0.15, 1.0)
 
     # 5. Main loop
     while running:
@@ -59,7 +84,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                # Allows you to release the mouse or quickly close the game with the ESCAPE key
+                # Exit the game if the user presses the ESC key
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
