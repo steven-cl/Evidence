@@ -16,6 +16,9 @@ class CameraFPS:
         # Head rotation (in degrees)
         self.pitch = 0.0   #Up / Down
         self.yaw = -90.0   # Left / Right (Initial orientation)
+        # Head rotation (in degrees)
+        self.pitch = 0.0   # Up / Down
+        self.yaw = -90.0   # Left / Right (Initial orientation)
 
         # Directional vectors of the camera
         self.front_x = 0.0
