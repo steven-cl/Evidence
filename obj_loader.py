@@ -5,13 +5,13 @@ from OpenGL.GL import *
 class Model3D:
     def __init__(self, file_route):
        
-        #Iniciia el modelo 3D separando la geometría por materiales
+        # Initialize the 3D model, separating geometry by materials
    
-        print(f"Cargo el modelo desde:  {file_route}...")
+        print(f"Loading model from: {file_route}...")
         
         self.scene = pywavefront.Wavefront(file_route, collect_faces=True)
         
-        # Aqui guardamos la info de los mteriales
+        # Here we store material information
         self.materiales = {}
         
         for mat_name, material in self.scene.materials.items():
@@ -24,7 +24,7 @@ class Model3D:
             
             num_vertices = slots // material.vertex_size
             
-            # Sirve para identificar el formato de vertices exportado desde Blender
+            # Used to identify the vertex format exported from Blender
             gl_format = GL_V3F 
             if material.vertex_format == 'N3F_V3F':
                 gl_format = GL_N3F_V3F
@@ -44,7 +44,7 @@ class Model3D:
             self.materiales[mat_name].append(mesh_info)
             
        
-        print("Materiales listos para el main.py:")
+        print("Materials ready for main.py:")
         for name in self.materiales.keys():
             print(f" -> '{name}'")
 

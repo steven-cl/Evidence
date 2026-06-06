@@ -78,7 +78,7 @@ class CameraFPS:
 
         # Apply sensitivity
         self.yaw += dx * self.sensitivity
-        self.pitch -= dy * self.sensitivity  # Invertido para comportamiento estándar de cámara
+        self.pitch -= dy * self.sensitivity  # Inverted for standard camera behavior
 
         # Restrict the vertical viewing angle to avoid flipping
         if self.pitch > 89.0:

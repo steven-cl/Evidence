@@ -3,7 +3,7 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-# Importar módulos del proyecto
+# Import project modules
 from obj_loader import Model3D
 from camera import CameraFPS
 from pared import Texture 
@@ -15,22 +15,22 @@ def setup_fog():
     glFogf(GL_FOG_START, 5.0)   # The fog starts at 5 meters from the camera
     glFogf(GL_FOG_END, 18.0)    # The fog fully obscures objects at 18 meters or more, creating a sense of depth and mystery
     
-    # 1. Define the mathematical mode (GL_EXP2 gives an excellent atmosphere of mystery)
+    # Define the fog mode (GL_EXP2 provides a subtle exponential fog)
     glFogi(GL_FOG_MODE, GL_EXP2)
-    
-    # 2. Define the density (Values between 0.01 and 0.1 control how fast the fog thickens)
+
+    # Define the density (Values between 0.01 and 0.1 control how fast the fog thickens)
     glFogf(GL_FOG_DENSITY, 0.03)
-    
-    # 3. Define the fog color (R, G, B, A)
-    # We will use a dark grayish-blue to maintain the nocturnal and mysterious atmosphere
+
+    # Define the fog color (R, G, B, A)
+    # Use a dark grayish-blue to maintain a nocturnal, mysterious atmosphere
     fog_color = [0.1, 0.1, 0.15, 1.0]
     glFogfv(GL_FOG_COLOR, fog_color)
     
-    # 4. Quality of the calculation (GL_NICEST evaluates the fog by pixel, not by vertex)
+    # Set calculation quality (GL_NICEST evaluates the fog per-pixel)
     glHint(GL_FOG_HINT, GL_NICEST)
 
 def main():
-    # 1. Window setup
+    # Window setup
     pygame.init()
     screen_width, screen_height = 800, 600
     pygame.display.set_mode((screen_width, screen_height), DOUBLEBUF | OPENGL)
@@ -40,7 +40,7 @@ def main():
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
 
-    # 2. Instantiate and configure the Camera
+    # Camera setup
     camera = CameraFPS(screen_width, screen_height)
     camera.configure_projection()
     
@@ -62,20 +62,20 @@ def main():
     }
     skybox = Skybox(skybox_paths)
 
-    # 3. Enable depth testing
+    # Enable depth testing
     glEnable(GL_DEPTH_TEST)
 
     # Initialize the fog
     setup_fog()
 
-    # 4. Instantiate the house model
+    # Load house model
     house = Model3D('source/models/RenewHouse.obj')
 
-    # Desde aqui se cargan las texturas, no toquen esta vaina por lo que mas quieran
+    # Textures are loaded below — do not modify this section
     
     config_visual = {
 
-        #Texturizado Principal
+        # Main texturing
         "matParedPrincipal": Texture('source/textures/texture_wall.jpg'),
         "matPared": Texture('source/textures/texture_wall.jpg'),
         "matPared2": Texture('source/textures/texture_wall.jpg'),
@@ -111,7 +111,7 @@ def main():
 
 
 
-        #sala
+        # Living room
         "matSofa": Texture('source/textures/texture_tela.jpg'),
         "matSillon": Texture('source/textures/texture_tela.jpg'),
         "matMesaTV": Texture('source/textures/texture_muebles.jpg'),
@@ -136,13 +136,13 @@ def main():
         "matLuz7": (0.05, 0.05, 0.05),
         "matLuz8": (0.05, 0.05, 0.05),
       
-        #Decoraciones
+        # Decorations
         "matDeco": Texture('source/textures/texture_deco.jpg'),
         "matDeco2": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco3": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco4": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco5": Texture('source/textures/texture_Deco2.jpg'),
-        #Cocina
+        # Kitchen
         "matCocina": Texture('source/textures/texture_base_kitchen.jpg'),
         "matGabinete": Texture('source/textures/texture_kitchen.jpg'),
         "matGabinete2": Texture('source/textures/texture_kitchen.jpg'),
@@ -185,7 +185,7 @@ def main():
         "matSilla3": Texture('source/textures/texture_wood.jpg'),
         "matSilla4": Texture('source/textures/texture_wood.jpg'),
         "matHorno": Texture('source/textures/texture_horno.jpg'),
-        #aqui empiezo a texturizar las camas
+        # Bedroom textures start here
         "matBaseCama": Texture('source/textures/texture_wood.jpg'),
         "matBaseCama2": Texture('source/textures/texture_wood.jpg'),
         "matBaseCama3": Texture('source/textures/texture_wood.jpg'),
@@ -195,7 +195,7 @@ def main():
         "matColchon3": Texture('source/textures/texture_tela.jpg'),
         "matColchon4": Texture('source/textures/texture_tela.jpg'),
         
-        #Relojes
+        # Clocks
         "matReloj": Texture('source/textures/texture_shining.jpg'),
         "matRelojHoras": Texture('source/textures/texture_watch.jpg'),
         "matRelojHora2": Texture('source/textures/texture_watch.jpg'),
@@ -273,29 +273,28 @@ def main():
         # Draw the house model
         glPushMatrix()
         
-        # Iterar por cada material que compone la casa de forma rápida
+        # Iterate over each material composing the house
         for nombre_mat in house.materiales.keys():
             
             if nombre_mat in config_visual:
                 asignacion = config_visual[nombre_mat]
                 
-                # Detectar si le asignamos una clase Texture o una tupla de color
+                # Detect whether the assignment is a Texture instance or an RGB color tuple
                 if isinstance(asignacion, Texture):
                     glEnable(GL_TEXTURE_2D)
-                    glColor3f(1.0, 1.0, 1.0) # Forzar blanco para que la textura no se pinte de otro color
+                    glColor3f(1.0, 1.0, 1.0) # Force white so the texture's colors are not altered
                     asignacion.bind()
                 else:
                     glDisable(GL_TEXTURE_2D)
                     glBindTexture(GL_TEXTURE_2D, 0)
-                    glColor3f(asignacion[0], asignacion[1], asignacion[2]) # Aplicar color RGB
+                    glColor3f(asignacion[0], asignacion[1], asignacion[2]) # Apply RGB color
             else:
-                # En dado caso se me pasa o agrego un modelo sin un UV MAP simplementa se pinta de gris creo
-                
+                # If a material is missing or the model lacks UVs, render it in gray
                 glDisable(GL_TEXTURE_2D)
                 glBindTexture(GL_TEXTURE_2D, 0)
                 glColor3f(0.6, 0.6, 0.6)
                 
-            # Dibujar la geometría de este material específico
+            # Draw the geometry for this specific material
             house.draw_material(nombre_mat)
             
         glPopMatrix()
