@@ -10,7 +10,7 @@ class CameraFPS:
 
         # Detective's position in the world (X, Y, Z)
         self.pos_x = 0.0
-        self.pos_y = 1.5  # Altura de los ojos
+        self.pos_y = 1.5  # Initial viewing height
         self.pos_z = 5.0
         
         # Rotation of the head (in degrees)
