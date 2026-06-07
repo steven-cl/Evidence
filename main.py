@@ -2,6 +2,8 @@ import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
+#this is just for a testing, eventually it'll be add the interaction for the rest of the objects 
+from door_In import Door
 
 # Import project modules
 from obj_loader import Model3D
@@ -85,28 +87,23 @@ def main():
         "matPared6": Texture('source/textures/texture_wall.jpg'),
         "matMarcoPuerta": (0.45, 0.24, 0.1),
         "matPuerta": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron": (0.05, 0.05, 0.05),
+        "matPerilla": (0.05, 0.05, 0.05),
         "matMarcoPuerta2": (0.45, 0.24, 0.1),
         "matPuerta2": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron2": (0.05, 0.05, 0.05),
+        "matP2": (0.05, 0.05, 0.05),
         "matMarcoPuerta3": (0.45, 0.24, 0.1),
         "matPuerta3": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron3": (0.05, 0.05, 0.05),
+        "matP3": (0.05, 0.05, 0.05),
         "matMarcoPuerta4": (0.45, 0.24, 0.1),
         "matPuerta4": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron4": (0.05, 0.05, 0.05),
+        "matP4": (0.05, 0.05, 0.05),
         "matMarcoPuerta5": (0.45, 0.24, 0.1),
         "matPuerta5": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron5": (0.05, 0.05, 0.05),
+        "matP5": (0.05, 0.05, 0.05),
         "matMarcoPuerta6": (0.45, 0.24, 0.1),
         "matPuerta6": Texture('source/textures/texture_wood.jpg'),
-        "matPerillaFron6": (0.05, 0.05, 0.05),
-        "matPerillaback": (0.05, 0.05, 0.05),
-        "matPerillaback2": (0.05, 0.05, 0.05),
-        "matPerillaback3": (0.05, 0.05, 0.05),
-        "matPerillaback4": (0.05, 0.05, 0.05),
-        "matPerillaback5": (0.05, 0.05, 0.05),
-        "matPerillaback6": (0.05, 0.05, 0.05),
+        "matP6": (0.05, 0.05, 0.05),
+        
 
 
 
@@ -213,6 +210,23 @@ def main():
                                             
     }
 
+    # the doors and knobs, why? well they are separate objects, that is how I made them in Blender
+    
+    settingDoors = [
+        Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
+        Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
+        Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
+        Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
+        Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
+        #Door("matPuerta6", -2.9858, 1.379, 0.37832, "matP6", -3.7616, 1.0498, 0.45044), Do not activate this one, it will only work with a key
+    ]
+
+    # setting the filter
+    mat_doors = set()
+    for p in settingDoors:
+        mat_doors.add(p.mat)
+        mat_doors.add(p.mat_perilla)
+
     clock = pygame.time.Clock()
     running = True
 
@@ -228,10 +242,30 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+                
             elif event.type == pygame.KEYDOWN:
                 # Exit the game if the user presses the ESC key
                 if event.key == pygame.K_ESCAPE:
                     running = False
+
+                #This part we validate the opening doors
+                elif event.key == pygame.K_e:
+                    closest_door = None
+                    minDist = 2.0 
+                    
+                    for p in settingDoors:
+                        #we gotta check if we are looking at the door
+                        if p.doorAction(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
+                            
+                            dist = p.get_distance(camera.pos_x, camera.pos_z)
+                            
+                            if dist < minDist:
+                                minDist = dist
+                                closest_door = p
+                                
+                    #after check it, the door must be open
+                    if closest_door:
+                        closest_door.toggle()
 
         # Capture and integrate mouse and keyboard movement
         camera.process_mouse()
@@ -267,27 +301,35 @@ def main():
 
         glEnable(GL_DEPTH_TEST)   # Reactivate depth for the rest of the objects
 
-        # Update camera before drawing the world
+
+       # Update camera before drawing the world
         camera.update_view()
+        
+        # Updating the doors animation
+        for p in settingDoors:
+            p.update(dt)
         
         # Draw the house model
         glPushMatrix()
         
         # Iterate over each material composing the house
-        for nombre_mat in house.materiales.keys():
+        for name_mat in house.materiales.keys():
             
-            if nombre_mat in config_visual:
-                asignacion = config_visual[nombre_mat]
+            if name_mat in mat_doors:
+                continue
+            
+            if name_mat in config_visual:
+                asig = config_visual[name_mat]
                 
                 # Detect whether the assignment is a Texture instance or an RGB color tuple
-                if isinstance(asignacion, Texture):
+                if isinstance(asig, Texture):
                     glEnable(GL_TEXTURE_2D)
                     glColor3f(1.0, 1.0, 1.0) # Force white so the texture's colors are not altered
-                    asignacion.bind()
+                    asig.bind()
                 else:
                     glDisable(GL_TEXTURE_2D)
                     glBindTexture(GL_TEXTURE_2D, 0)
-                    glColor3f(asignacion[0], asignacion[1], asignacion[2]) # Apply RGB color
+                    glColor3f(asig[0], asig[1], asig[2]) # Apply RGB color
             else:
                 # If a material is missing or the model lacks UVs, render it in gray
                 glDisable(GL_TEXTURE_2D)
@@ -295,7 +337,11 @@ def main():
                 glColor3f(0.6, 0.6, 0.6)
                 
             # Draw the geometry for this specific material
-            house.draw_material(nombre_mat)
+            house.draw_material(name_mat)
+            
+        # Drawing every object with them transformation
+        for p in settingDoors:
+            p.draw(house, config_visual)
             
         glPopMatrix()
 
