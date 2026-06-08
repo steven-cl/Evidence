@@ -1,6 +1,6 @@
-from OpenGL.GL import *
-from OpenGL.GLU import *
-import pygame
+from OpenGL.GL import * # pyright: ignore[reportMissingImports]
+from OpenGL.GLU import * # pyright: ignore[reportMissingImports]
+import pygame # pyright: ignore[reportMissingImports]
 import math
 import glm
 
@@ -9,7 +9,7 @@ class CameraFPS:
         self.width = width
         self.height = height
 
-        # Detective position in the world (X, Y, Z)
+        # Detective's position in the world (X, Y, Z)
         self.pos_x = 0.0
         self.pos_y = 1.5  # Eye height
         self.pos_z = 5.0
@@ -74,7 +74,7 @@ class CameraFPS:
         self.right_x = self.front_z / r_length
         self.right_z = -self.front_x / r_length
 
-    def process_mouse(self):
+    def process_mouse(self, dx, dy):
         """
         Captures relative mouse movement and rotates the camera.
         """

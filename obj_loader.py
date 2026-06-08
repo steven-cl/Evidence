@@ -91,7 +91,7 @@ class Model3D:
             elif material.vertex_format == 'T2F_N3F_V3F':
                 gl_format = GL_T2F_N3F_V3F
             
-            self.meshes.append({
+            mesh_info = {
                 'vertex_data': vertex_data,
                 'num_vertices': num_vertices,
                 'gl_format': gl_format
