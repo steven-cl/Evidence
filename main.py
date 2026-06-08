@@ -99,10 +99,12 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
         quadric = gluNewQuadric()
         gluQuadricDrawStyle(quadric, GLU_LINE)
 
+        '''
         glPushMatrix()
         glTranslatef(camera.head_pos.x, camera.head_pos.y, camera.head_pos.z)
         gluSphere(quadric, camera.radius, 10, 10)
         glPopMatrix()
+        '''
 
         glPushMatrix()
         glTranslatef(camera.torso_pos.x, camera.torso_pos.y, camera.torso_pos.z)
@@ -115,6 +117,8 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
         glPopMatrix()
 
         gluDeleteQuadric(quadric)
+        
+        glColor3f(1.0, 1.0, 1.0)
 
     # --- RESTAURACIÓN INTELIGENTE ---
     # Respetamos el modo F3. Si estaba encendido, regresamos a LINE, si no, a FILL.

@@ -6,9 +6,6 @@ import os
 from OpenGL.GL import *
 
 def load_texture(image_path):
-    """
-    Loads an image with Pygame and converts it into an OpenGL texture.
-    """
     try:
         texture_surface = pygame.image.load(image_path)
         texture_data = pygame.image.tobytes(texture_surface, "RGBA", True)
@@ -33,15 +30,14 @@ class Triangle:
         self.b = glm.vec3(v2)
         self.c = glm.vec3(v3)
         self.is_double_sided = is_double_sided
+        self.is_climbable = False # Propiedad para poder saltar sobre objetos
         
-        # SAFE CROSS PRODUCT: Prevent zero-length normalization (avoids NaN camera explosions)
         cross_prod = glm.cross(self.b - self.a, self.c - self.a)
         if glm.length(cross_prod) > 0.0001:
             self.normal = glm.normalize(cross_prod)
         else:
             self.normal = glm.vec3(0.0, 1.0, 0.0)
         
-        # Precompute spatial bounding box limits
         margin = 1.0 
         self.min_x = min(self.a.x, self.b.x, self.c.x) - margin
         self.max_x = max(self.a.x, self.b.x, self.c.x) + margin
@@ -52,9 +48,6 @@ class Triangle:
 
 class Model3D:
     def __init__(self, file_route, scale=1.0, texture_filename=None, door_materials=None):
-        """
-        Initialize the 3D model, separating geometry by materials into structured dictionaries.
-        """
         print(f"Loading model from: {file_route}...")
         self.scene = pywavefront.Wavefront(file_route, collect_faces=True)
         
@@ -62,7 +55,6 @@ class Model3D:
         self.colliders = [] 
         self.door_source_triangles = {} 
         
-        # Spatial Grid Partitioning Parameters
         self.grid_size = 3.0  
         self.spatial_grid = {} 
         
@@ -108,16 +100,15 @@ class Model3D:
                 self.materiales[name] = []
             self.materiales[name].append(mesh_info)
 
-            # --- AUTOMATED BOUNDING BOX GENERATION FOR LAMPS & FURNITURE ---
-            # [UNIFIED] Added furniture tags: "mesa", "comedor", "sofa", "sillon", "cama", "silla", "cocina", "gabinete", "horno"
-            FURNITURE_KEYWORDS = ["lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "cocina", "gabinete", "horno"]
+            # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
+            # [RESTAURADO] Sin cocina ni gabinete para evitar el bloqueo del pasillo
+            FURNITURE_KEYWORDS = ["lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno"]
             
             if any(kw in name.lower() for kw in FURNITURE_KEYWORDS):
                 b_min_x, b_max_x = float('inf'), float('-inf')
                 b_min_y, b_max_y = float('inf'), float('-inf')
                 b_min_z, b_max_z = float('inf'), float('-inf')
                 
-                # Scan all vertices to find the absolute spatial boundaries of the object
                 for idx in range(0, len(v), stride):
                     x = v[idx + stride - 3]
                     y = v[idx + stride - 2]
@@ -129,13 +120,16 @@ class Model3D:
                     if z < b_min_z: b_min_z = z
                     if z > b_max_z: b_max_z = z
                 
-                # Apply safety padding margin ONLY for lamps to seal tight gaps with walls
+                # [RESTAURADO] Márgenes de ensanchamiento y reducción
                 if "lamp" in name.lower():
                     padding = 0.12 
                     b_min_x -= padding; b_max_x += padding
                     b_min_z -= padding; b_max_z += padding
+                elif any(kw in name.lower() for kw in ["mesa", "comedor", "silla"]):
+                    inset = 0.08 # Achicamos 8cm para abrir el pasillo de la cocina
+                    b_min_x += inset; b_max_x -= inset
+                    b_min_z += inset; b_max_z -= inset
                 
-                # Map the 8 corners of the custom bounding box
                 c000 = (b_min_x, b_min_y, b_min_z)
                 c100 = (b_max_x, b_min_y, b_min_z)
                 c010 = (b_min_x, b_max_y, b_min_z)
@@ -145,31 +139,32 @@ class Model3D:
                 c011 = (b_min_x, b_max_y, b_max_z)
                 c111 = (b_max_x, b_max_y, b_max_z)
                 
-                # Build the 6 solid faces (12 triangles total) pointing strictly OUTWARD around the asset
                 box_triangles = [
-                    Triangle(c001, c101, c011, is_double_sided=False), Triangle(c111, c011, c101, is_double_sided=False), # Front Face (+Z)
-                    Triangle(c100, c000, c110, is_double_sided=False), Triangle(c010, c110, c000, is_double_sided=False), # Back Face (-Z)
-                    Triangle(c000, c001, c010, is_double_sided=False), Triangle(c011, c010, c001, is_double_sided=False), # Left Face (-X)
-                    Triangle(c101, c100, c111, is_double_sided=False), Triangle(c110, c111, c100, is_double_sided=False), # Right Face (+X)
-                    Triangle(c010, c011, c110, is_double_sided=False), Triangle(c111, c110, c011, is_double_sided=False), # Top Face Roof (+Y)
-                    Triangle(c000, c100, c001, is_double_sided=False), Triangle(c101, c001, c100, is_double_sided=False)  # Bottom Face Floor (-Y)
+                    Triangle(c001, c101, c011, is_double_sided=False), Triangle(c111, c011, c101, is_double_sided=False), 
+                    Triangle(c100, c000, c110, is_double_sided=False), Triangle(c010, c110, c000, is_double_sided=False), 
+                    Triangle(c000, c001, c010, is_double_sided=False), Triangle(c011, c010, c001, is_double_sided=False), 
+                    Triangle(c101, c100, c111, is_double_sided=False), Triangle(c110, c111, c100, is_double_sided=False), 
+                    Triangle(c010, c011, c110, is_double_sided=False), Triangle(c111, c110, c011, is_double_sided=False), 
+                    Triangle(c000, c100, c001, is_double_sided=False), Triangle(c101, c001, c100, is_double_sided=False)  
                 ]
+                
+                # [RESTAURADO] Habilitamos el salto sobre la mesita de la sala
+                if "mesasala" in name.lower():
+                    for tri in box_triangles:
+                        tri.is_climbable = True
                 
                 for tri in box_triangles:
                     self.colliders.append(tri)
                     self._add_to_grid(tri)
-                continue # Skip the complex high-poly evaluation completely
+                continue 
 
-            # Identify tiny high-poly decorations that don't need any collision tracking at all
             is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", "perilla", "deco", "luz", "jarron"])
             if is_ignored_prop:
                 continue 
 
-            # Keywords that define architecture. Architecture must be 100% solid.
             STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
 
-            # Generate mathematical polygon structures natively at 100% density for structural walls
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])
                 v2 = (v[i + stride * 2 - 3], v[i + stride * 2 - 2], v[i + stride * 2 - 1])
@@ -188,7 +183,6 @@ class Model3D:
         print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
 
     def _add_to_grid(self, tri):
-        """Helper to inject a triangle into the pre-computed spatial partitioning hash map"""
         start_x = int(tri.min_x // self.grid_size)
         end_x = int(tri.max_x // self.grid_size)
         start_z = int(tri.min_z // self.grid_size)
