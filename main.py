@@ -2,22 +2,24 @@ import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
-#this is just for a testing, eventually it'll be add the interaction for the rest of the objects 
-from door_In import Door
+from menu import MainMenu
 
-# Import project modules
-from obj_loader import Model3D
+# Import internal gameplay modules
 from camera import CameraFPS
-from pared import Texture 
 from skybox import Skybox
+from scene_loader import (
+    load_scene_assets,
+    toggle_nearest_visible_door,
+    draw_static_model,
+    update_doors,
+    draw_doors,
+)
 
 def setup_fog():
-    """Configure the global fog parameters in OpenGL"""
-    glEnable(GL_FOG)  # Enable fog rendering
-    glFogf(GL_FOG_START, 5.0)   # The fog starts at 5 meters from the camera
-    glFogf(GL_FOG_END, 18.0)    # The fog fully obscures objects at 18 meters or more, creating a sense of depth and mystery
+    """Configures global OpenGL exponential fog parameters for atmospheric mystery effect"""
+    glEnable(GL_FOG)
     
-    # Define the fog mode (GL_EXP2 provides a subtle exponential fog)
+    # Use GL_EXP2 for a more realistic and dense volumetric fog accumulation over distance
     glFogi(GL_FOG_MODE, GL_EXP2)
 
     # Define the density (Values between 0.01 and 0.1 control how fast the fog thickens)
@@ -31,38 +33,112 @@ def setup_fog():
     # Set calculation quality (GL_NICEST evaluates the fog per-pixel)
     glHint(GL_FOG_HINT, GL_NICEST)
 
-def main():
-    # Window setup
+
+def setup_display():
     pygame.init()
     screen_width, screen_height = 800, 600
     pygame.display.set_mode((screen_width, screen_height), DOUBLEBUF | OPENGL)
     pygame.display.set_caption("Evidence - Resolve the Mystery")
+    return screen_width, screen_height
 
-    # Mouse control settings: hide cursor and capture it in the window
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
 
-    # Camera setup
+def setup_camera(screen_width, screen_height):
     camera = CameraFPS(screen_width, screen_height)
     camera.configure_projection()
-    
-    # Set initial position and orientation manually for a better starting view of the house
-    camera.pos_x = 0.0 
-    camera.pos_y = 1.5  # Initial viewing height
-    camera.pos_z = 8.0   
-    camera.pitch = 0.0  # Initially looking down
-    camera.yaw = -90.0   # Standard front orientation
-    
-    # Update the camera's internal vectors based on the initial pitch and yaw
+    camera.pos_x = 0.0
+    camera.pos_y = 1.5
+    camera.pos_z = 8.0
+    camera.pitch = 0.0
+    camera.yaw = -90.0
     camera.update_camera_vectors()
+    return camera
 
-    # initialize skybox
+
+def setup_skybox():
     skybox_paths = {
-        'posz': 'source/textures/posz.jpg', 'posx': 'source/textures/posx.jpg',
-        'negz': 'source/textures/negz.jpg',   'posy': 'source/textures/posy.jpg',
-        'negx': 'source/textures/negx.jpg',     'negy': 'source/textures/negy.jpg'
+        'posz': 'source/textures/posz.jpg',
+        'posx': 'source/textures/posx.jpg',
+        'negz': 'source/textures/negz.jpg',
+        'posy': 'source/textures/posy.jpg',
+        'negx': 'source/textures/negx.jpg',
+        'negy': 'source/textures/negy.jpg',
     }
-    skybox = Skybox(skybox_paths)
+    return Skybox(skybox_paths)
+
+
+def process_game_event(event, menu, camera, setting_doors):
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_ESCAPE:
+            menu.state = 'MENU'
+        elif event.key == pygame.K_e:
+            toggle_nearest_visible_door(setting_doors, camera)
+
+    elif event.type == pygame.MOUSEMOTION:
+        camera.process_mouse(event.rel[0], event.rel[1])
+
+
+def handle_events(menu, camera, setting_doors):
+    running = True
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+
+        if menu.state in ['MENU', 'OPTIONS']:
+            menu.handle_input(event, camera)
+            if menu.state == 'QUIT':
+                return False
+        elif menu.state == 'GAME':
+            process_game_event(event, menu, camera, setting_doors)
+
+    return running
+
+
+def render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt):
+    glDisable(GL_DEPTH_TEST)
+    glDisable(GL_FOG)
+
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+
+    gluLookAt(
+        0.0, 0.0, 0.0,
+        camera.front_x, camera.front_y, camera.front_z,
+        0.0, 1.0, 0.0,
+    )
+    skybox.draw()
+
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_FOG)
+
+    camera.update_view()
+    update_doors(setting_doors, dt)
+    draw_static_model(house, config_visual, door_materials)
+    draw_doors(setting_doors, house, config_visual)
+
+
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt):
+    glClearColor(0.1, 0.1, 0.15, 1.0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    if menu.state in ['MENU', 'OPTIONS']:
+        pygame.event.set_grab(False)
+        pygame.mouse.set_visible(True)
+        menu.render()
+    else:
+        pygame.event.set_grab(True)
+        pygame.mouse.set_visible(False)
+        camera.process_keyboard(dt)
+        render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt)
+
+    pygame.display.flip()
+
+def main():
+    screen_width, screen_height = setup_display()
+
+    menu = MainMenu(screen_width, screen_height)
+    camera = setup_camera(screen_width, screen_height)
+    skybox = setup_skybox()
 
     # Enable depth testing
     glEnable(GL_DEPTH_TEST)
@@ -70,299 +146,18 @@ def main():
     # Initialize the fog
     setup_fog()
 
-    # Load house model
-    house = Model3D('source/models/RenewHouse.obj')
-
-    # Textures are loaded below — do not modify this section
-    
-    config_visual = {
-
-        # Main texturing
-        "matParedPrincipal": Texture('source/textures/texture_wall.jpg'),
-        "matPared": Texture('source/textures/texture_wall.jpg'),
-        "matPared2": Texture('source/textures/texture_wall.jpg'),
-        "matPared3": Texture('source/textures/texture_wall.jpg'),
-        "matPared4": Texture('source/textures/texture_wall.jpg'),
-        "matPared5": Texture('source/textures/texture_wall.jpg'),
-        "matPared6": Texture('source/textures/texture_wall.jpg'),
-        "matMarcoPuerta": (0.45, 0.24, 0.1),
-        "matPuerta": Texture('source/textures/texture_wood.jpg'),
-        "matPerilla": (0.05, 0.05, 0.05),
-        "matMarcoPuerta2": (0.45, 0.24, 0.1),
-        "matPuerta2": Texture('source/textures/texture_wood.jpg'),
-        "matP2": (0.05, 0.05, 0.05),
-        "matMarcoPuerta3": (0.45, 0.24, 0.1),
-        "matPuerta3": Texture('source/textures/texture_wood.jpg'),
-        "matP3": (0.05, 0.05, 0.05),
-        "matMarcoPuerta4": (0.45, 0.24, 0.1),
-        "matPuerta4": Texture('source/textures/texture_wood.jpg'),
-        "matP4": (0.05, 0.05, 0.05),
-        "matMarcoPuerta5": (0.45, 0.24, 0.1),
-        "matPuerta5": Texture('source/textures/texture_wood.jpg'),
-        "matP5": (0.05, 0.05, 0.05),
-        "matMarcoPuerta6": (0.45, 0.24, 0.1),
-        "matPuerta6": Texture('source/textures/texture_wood.jpg'),
-        "matP6": (0.05, 0.05, 0.05),
-        "matMarcoPuerta7": (0.45, 0.24, 0.1),
-        "matPuerta7": Texture('source/textures/texture_wood.jpg'),
-        "matP7": (0.05, 0.05, 0.05),
-        
-
-
-
-
-        # Living room
-        "matSofa": Texture('source/textures/texture_tela.jpg'),
-        "matSillon": Texture('source/textures/texture_tela.jpg'),
-        "matMesaTV": Texture('source/textures/texture_muebles.jpg'),
-        "matLamp": Texture('source/textures/texture_blood.jpg'),
-        "matLamp2": Texture('source/textures/texture_blood.jpg'),
-        "matLamp3": Texture('source/textures/texture_blood.jpg'),
-        "matLamp4": Texture('source/textures/texture_blood.jpg'),
-        "matLamp5": Texture('source/textures/texture_blood.jpg'),
-        "matTV":   (0.05, 0.05, 0.05),
-        "matJarron": (0.55, 0.27, 0.08),
-        "matBotella":   (0.05, 0.05, 0.05),
-        "matBotella2":   (0.05, 0.05, 0.05),
-        "matBotella3":   (0.05, 0.05, 0.05),
-        "matBotella4":   (0.05, 0.05, 0.05),
-        "matMesaSala": Texture('source/textures/texture_muebles.jpg'),
-        "matLuz": (0.05, 0.05, 0.05),
-        "matLuz2": (0.05, 0.05, 0.05),
-        "matLuz3": (0.05, 0.05, 0.05),
-        "matLuz4": (0.05, 0.05, 0.05),
-        "matLuz5": (0.05, 0.05, 0.05),
-        "matLuz6": (0.05, 0.05, 0.05),
-        "matLuz7": (0.05, 0.05, 0.05),
-        "matLuz8": (0.05, 0.05, 0.05),
-      
-        # Decorations
-        "matDeco": Texture('source/textures/texture_deco.jpg'),
-        "matDeco2": Texture('source/textures/texture_Deco2.jpg'),
-        "matDeco3": Texture('source/textures/texture_Deco2.jpg'),
-        "matDeco4": Texture('source/textures/texture_Deco2.jpg'),
-        "matDeco5": Texture('source/textures/texture_Deco2.jpg'),
-        # Kitchen
-        "matCocina": Texture('source/textures/texture_base_kitchen.jpg'),
-        "matGabinete": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete2": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete3": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete4": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete5": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete6": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete7": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete8": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete9": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete10": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete11": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete12": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete13": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete14": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete15": Texture('source/textures/texture_kitchen.jpg'),
-        "matGabinete16": Texture('source/textures/texture_kitchen.jpg'),
-        "matManivela": Texture('source/textures/texture_metal.jpg'),
-        "matManivela2": Texture('source/textures/texture_metal.jpg'),
-        "matManivela3": Texture('source/textures/texture_metal.jpg'),
-        "matManivela4": Texture('source/textures/texture_metal.jpg'),
-        "matManivela5": Texture('source/textures/texture_metal.jpg'),
-        "matManivela6": Texture('source/textures/texture_metal.jpg'),
-        "matManivela7": Texture('source/textures/texture_metal.jpg'),
-        "matManivela8": Texture('source/textures/texture_metal.jpg'),
-        "matManivela9": Texture('source/textures/texture_metal.jpg'),
-        "matManivela10": Texture('source/textures/texture_metal.jpg'),
-        "matManivela11": Texture('source/textures/texture_metal.jpg'),
-        "matManivela12": Texture('source/textures/texture_metal.jpg'),
-        "matManivela13": Texture('source/textures/texture_metal.jpg'),
-        "matManivela14": Texture('source/textures/texture_metal.jpg'),
-        "matManivela15": Texture('source/textures/texture_metal.jpg'),
-        "matManivela16": Texture('source/textures/texture_metal.jpg'),
-        "matPerillaCocina": Texture('source/textures/texture_metal.jpg'),
-        "matPerillaCocina2": Texture('source/textures/texture_metal.jpg'),
-        "matQuemadores": Texture('source/textures/texture_metal.jpg'),
-        "matComedor": Texture('source/textures/texture_wood.jpg'),
-        "matSilla": Texture('source/textures/texture_wood.jpg'),
-        "matSilla2": Texture('source/textures/texture_wood.jpg'),
-        "matSilla3": Texture('source/textures/texture_wood.jpg'),
-        "matSilla4": Texture('source/textures/texture_wood.jpg'),
-        "matHorno": Texture('source/textures/texture_horno.jpg'),
-        # Bedroom textures start here
-        "matBaseCama": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama2": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama3": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama4": Texture('source/textures/texture_wood.jpg'),
-        "matColchon": Texture('source/textures/texture_tela.jpg'),
-        "matColchon2": Texture('source/textures/texture_tela.jpg'),
-        "matColchon3": Texture('source/textures/texture_tela.jpg'),
-        "matColchon4": Texture('source/textures/texture_tela.jpg'),
-        
-        # Clocks
-        "matReloj": Texture('source/textures/texture_shining.jpg'),
-        "matRelojHoras": Texture('source/textures/texture_watch.jpg'),
-        "matRelojHora2": Texture('source/textures/texture_watch.jpg'),
-        "matRelojHora3": Texture('source/textures/texture_watch.jpg'),
-        "matRelojHora4": Texture('source/textures/texture_watch.jpg'),
-        
-
-
-        
-        "matTecho": Texture('source/textures/texture_techo.jpg'),
-        "matPiso": Texture('source/textures/texture_floor.jpg'),
-        
-        
-        
-                                            
-    }
-
-    # the doors and knobs, why? well they are separate objects, that is how I made them in Blender
-    
-    settingDoors = [
-        Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
-        Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
-        Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
-        Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
-        Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
-        Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),# This is our principal door
-        #Door("matPuerta6", -2.9858, 1.379, 0.37832, "matP6", -3.7616, 1.0498, 0.45044), Do not activate this one, it will only work with a key
-    ]
-
-    # setting the filter
-    mat_doors = set()
-    for p in settingDoors:
-        mat_doors.add(p.mat)
-        mat_doors.add(p.mat_perilla)
+    house, config_visual, setting_doors, door_materials = load_scene_assets()
 
     clock = pygame.time.Clock()
     running = True
 
     glClearColor(0.1, 0.1, 0.15, 1.0)
 
-    glClearColor(0.1, 0.1, 0.15, 1.0)
-
-    # Main loop
     while running:
-        # Calculate Delta Time in seconds (example. at 60 FPS, dt will be ~0.0166)
         dt = clock.tick(60) / 1000.0
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                
-            elif event.type == pygame.KEYDOWN:
-                # Exit the game if the user presses the ESC key
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-
-                #This part we validate the opening doors
-                elif event.key == pygame.K_e:
-                    closest_door = None
-                    minDist = 2.0 
-                    
-                    for p in settingDoors:
-                        #we gotta check if we are looking at the door
-                        if p.doorAction(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
-                            
-                            dist = p.get_distance(camera.pos_x, camera.pos_z)
-                            
-                            if dist < minDist:
-                                minDist = dist
-                                closest_door = p
-                                
-                    #after check it, the door must be open
-                    if closest_door:
-                        closest_door.toggle()
-
-        # Capture and integrate mouse and keyboard movement
-        camera.process_mouse()
-        camera.process_keyboard(dt)
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        #Draw skybox
-        glDisable(GL_DEPTH_TEST)  # Temporarily disable depth
-        glLoadIdentity()
-        
-        # Forced LookAt on (0,0,0) using your camera's lookat vectors
-        gluLookAt(
-            0.0, 0.0, 0.0,
-            camera.front_x, camera.front_y, camera.front_z,
-            0.0, 1.0, 0.0
-        )
-        skybox.draw()
-
-        glEnable(GL_DEPTH_TEST)   # Reactivate depth for the rest of the objects
-
-        #Draw skybox
-        glDisable(GL_DEPTH_TEST)  # Temporarily disable depth
-        glLoadIdentity()
-        
-        # Forced LookAt on (0,0,0) using your camera's lookat vectors
-        gluLookAt(
-            0.0, 0.0, 0.0,
-            camera.front_x, camera.front_y, camera.front_z,
-            0.0, 1.0, 0.0
-        )
-        skybox.draw()
-
-        glEnable(GL_DEPTH_TEST)   # Reactivate depth for the rest of the objects
-
-
-       # Update camera before drawing the world
-        camera.update_view()
-        
-        # Updating the doors animation
-        for p in settingDoors:
-            p.update(dt)
-        
-        # Draw the house model
-        glPushMatrix()
-        
-        # Iterate over each material composing the house
-        for name_mat in house.materiales.keys():
-
-            if name_mat in mat_doors:
-                continue
-                
-            if name_mat == "matTerrenoExt":  #This is the plane material, you cant see it but still exist(just to test gravity)
-                continue
-
-            #the 2 if in the bottom control what I said in the previous comment
-
-            if name_mat in mat_doors:
-                continue
-            
-            if name_mat in config_visual:
-                asig = config_visual[name_mat]
-                
-                # Detect whether the assignment is a Texture instance or an RGB color tuple
-                if isinstance(asig, Texture):
-                    glEnable(GL_TEXTURE_2D)
-                    glColor3f(1.0, 1.0, 1.0) # Force white so the texture's colors are not altered
-                    asig.bind()
-                else:
-                    glDisable(GL_TEXTURE_2D)
-                    glBindTexture(GL_TEXTURE_2D, 0)
-                    glColor3f(asig[0], asig[1], asig[2]) # Apply RGB color
-            else:
-                # If a material is missing or the model lacks UVs, render it in gray
-                glDisable(GL_TEXTURE_2D)
-                glBindTexture(GL_TEXTURE_2D, 0)
-                glColor3f(0.6, 0.6, 0.6)
-
-
-        
-                
-            # Draw the geometry for this specific material
-            house.draw_material(name_mat)
-            
-        # Drawing every object with them transformation
-        for p in settingDoors:
-            p.draw(house, config_visual)
-
-            
-            
-        glPopMatrix()
-
-        pygame.display.flip()
+        running = handle_events(menu, camera, setting_doors)
+        render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt)
 
     pygame.quit()
 
