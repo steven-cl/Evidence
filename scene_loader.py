@@ -143,10 +143,14 @@ def build_door_material_set(setting_doors):
 
 
 def load_scene_assets():
-    house = Model3D('source/models/RenewHouse.obj')
+    # 1. Generate configs and doors FIRST
     config_visual = create_visual_config()
     setting_doors = create_doors()
     door_materials = build_door_material_set(setting_doors)
+    
+    # 2. Pass door_materials to Model3D so it knows what to separate
+    house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=door_materials)
+    
     return house, config_visual, setting_doors, door_materials
 
 

@@ -37,16 +37,17 @@ class MainMenu:
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)
         
-        
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
         
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
         glEnable(GL_TEXTURE_2D)
-
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        # --- CRUCIAL FIX: Reset global color state to clear stale 3D shading/fog tints ---
+        glColor4f(1.0, 1.0, 1.0, 1.0)
 
         glBegin(GL_QUADS)
         glTexCoord2f(0, 0); glVertex2f(x, y)
@@ -54,6 +55,7 @@ class MainMenu:
         glTexCoord2f(1, 1); glVertex2f(x + tex_width, y + tex_height)
         glTexCoord2f(0, 1); glVertex2f(x, y + tex_height)
         glEnd()
+        
         glDisable(GL_TEXTURE_2D)
         glDeleteTextures([tex_id])
 
