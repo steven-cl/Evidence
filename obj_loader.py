@@ -10,41 +10,39 @@ def load_texture(image_path):
     Loads an image with Pygame and converts it into an OpenGL texture.
     """
     try:
-        # Load the image
         texture_surface = pygame.image.load(image_path)
-        
-        # Extract pixel data.
-        # The 'True' at the end flips the image vertically, since OpenGL and Pygame
-        # interpret image Y axes in opposite directions.
         texture_data = pygame.image.tobytes(texture_surface, "RGBA", True)
         width = texture_surface.get_width()
         height = texture_surface.get_height()
 
-        # Generate an OpenGL texture ID
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)
 
-        # Configure how the texture is scaled (linear filter to avoid pixelation)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
-        # Send the image to the graphics card
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data)
-        
         return tex_id
     except Exception as e:
         print(f"Error loading texture {image_path}: {e}")
         return None
 
 class Triangle:
-    def __init__(self, v1, v2, v3):
+    def __init__(self, v1, v2, v3, is_double_sided=True):
         self.a = glm.vec3(v1)
         self.b = glm.vec3(v2)
         self.c = glm.vec3(v3)
-        self.normal = glm.normalize(glm.cross(self.b - self.a, self.c - self.a))
+        self.is_double_sided = is_double_sided
         
-        # Precompute the triangle spatial bounds with a margin
-        margin = 1.0 # Safety margin
+        # SAFE CROSS PRODUCT: Prevent zero-length normalization (avoids NaN camera explosions)
+        cross_prod = glm.cross(self.b - self.a, self.c - self.a)
+        if glm.length(cross_prod) > 0.0001:
+            self.normal = glm.normalize(cross_prod)
+        else:
+            self.normal = glm.vec3(0.0, 1.0, 0.0)
+        
+        # Precompute spatial bounding box limits
+        margin = 1.0 
         self.min_x = min(self.a.x, self.b.x, self.c.x) - margin
         self.max_x = max(self.a.x, self.b.x, self.c.x) + margin
         self.min_y = min(self.a.y, self.b.y, self.c.y) - margin
@@ -53,24 +51,33 @@ class Triangle:
         self.max_z = max(self.a.z, self.b.z, self.c.z) + margin
 
 class Model3D:
-    # NEW: Add 'texture_filename' with default value None
-    def __init__(self, file_route, scale=1.0, texture_filename=None):
-        print(f"Loading model from {file_route}...")
+    def __init__(self, file_route, scale=1.0, texture_filename=None, door_materials=None):
+        """
+        Initialize the 3D model, separating geometry by materials into structured dictionaries.
+        """
+        print(f"Loading model from: {file_route}...")
         self.scene = pywavefront.Wavefront(file_route, collect_faces=True)
         
-        self.meshes = []
+        self.materiales = {}
         self.colliders = [] 
+        self.door_source_triangles = {} 
         
-        # Load the global texture for this model only once
+        # Spatial Grid Partitioning Parameters
+        self.grid_size = 3.0  
+        self.spatial_grid = {} 
+        
+        if door_materials is None:
+            door_materials = set()
+        
         self.global_texture_id = None
         if texture_filename:
-            # Force it to look in the 'source/textures' folder
             tex_path = os.path.join("source", "textures", texture_filename)
             self.global_texture_id = load_texture(tex_path)
-            if self.global_texture_id:
-                print(f"Texture {texture_filename} successfully applied to the model.")
         
         for name, material in self.scene.materials.items():
+            if not material.vertices:
+                continue
+                
             v = material.vertices
             stride = material.vertex_size
 
@@ -95,35 +102,146 @@ class Model3D:
                 'vertex_data': vertex_data,
                 'num_vertices': num_vertices,
                 'gl_format': gl_format
-            })
+            }
 
-            # Generate collisions
+            if name not in self.materiales:
+                self.materiales[name] = []
+            self.materiales[name].append(mesh_info)
+
+            # --- AUTOMATED BOUNDING BOX GENERATION FOR LAMPS & FURNITURE ---
+            # [UNIFIED] Added furniture tags: "mesa", "comedor", "sofa", "sillon", "cama", "silla", "cocina", "gabinete", "horno"
+            FURNITURE_KEYWORDS = ["lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "cocina", "gabinete", "horno"]
+            
+            if any(kw in name.lower() for kw in FURNITURE_KEYWORDS):
+                b_min_x, b_max_x = float('inf'), float('-inf')
+                b_min_y, b_max_y = float('inf'), float('-inf')
+                b_min_z, b_max_z = float('inf'), float('-inf')
+                
+                # Scan all vertices to find the absolute spatial boundaries of the object
+                for idx in range(0, len(v), stride):
+                    x = v[idx + stride - 3]
+                    y = v[idx + stride - 2]
+                    z = v[idx + stride - 1]
+                    if x < b_min_x: b_min_x = x
+                    if x > b_max_x: b_max_x = x
+                    if y < b_min_y: b_min_y = y
+                    if y > b_max_y: b_max_y = y
+                    if z < b_min_z: b_min_z = z
+                    if z > b_max_z: b_max_z = z
+                
+                # Apply safety padding margin ONLY for lamps to seal tight gaps with walls
+                if "lamp" in name.lower():
+                    padding = 0.12 
+                    b_min_x -= padding; b_max_x += padding
+                    b_min_z -= padding; b_max_z += padding
+                
+                # Map the 8 corners of the custom bounding box
+                c000 = (b_min_x, b_min_y, b_min_z)
+                c100 = (b_max_x, b_min_y, b_min_z)
+                c010 = (b_min_x, b_max_y, b_min_z)
+                c110 = (b_max_x, b_max_y, b_min_z)
+                c001 = (b_min_x, b_min_y, b_max_z)
+                c101 = (b_max_x, b_min_y, b_max_z)
+                c011 = (b_min_x, b_max_y, b_max_z)
+                c111 = (b_max_x, b_max_y, b_max_z)
+                
+                # Build the 6 solid faces (12 triangles total) pointing strictly OUTWARD around the asset
+                box_triangles = [
+                    Triangle(c001, c101, c011, is_double_sided=False), Triangle(c111, c011, c101, is_double_sided=False), # Front Face (+Z)
+                    Triangle(c100, c000, c110, is_double_sided=False), Triangle(c010, c110, c000, is_double_sided=False), # Back Face (-Z)
+                    Triangle(c000, c001, c010, is_double_sided=False), Triangle(c011, c010, c001, is_double_sided=False), # Left Face (-X)
+                    Triangle(c101, c100, c111, is_double_sided=False), Triangle(c110, c111, c100, is_double_sided=False), # Right Face (+X)
+                    Triangle(c010, c011, c110, is_double_sided=False), Triangle(c111, c110, c011, is_double_sided=False), # Top Face Roof (+Y)
+                    Triangle(c000, c100, c001, is_double_sided=False), Triangle(c101, c001, c100, is_double_sided=False)  # Bottom Face Floor (-Y)
+                ]
+                
+                for tri in box_triangles:
+                    self.colliders.append(tri)
+                    self._add_to_grid(tri)
+                continue # Skip the complex high-poly evaluation completely
+
+            # Identify tiny high-poly decorations that don't need any collision tracking at all
+            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", "perilla", "deco", "luz", "jarron"])
+            if is_ignored_prop:
+                continue 
+
+            # Keywords that define architecture. Architecture must be 100% solid.
+            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco"]
+            is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
+
+            # Generate mathematical polygon structures natively at 100% density for structural walls
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])
                 v2 = (v[i + stride * 2 - 3], v[i + stride * 2 - 2], v[i + stride * 2 - 1])
                 v3 = (v[i + stride * 3 - 3], v[i + stride * 3 - 2], v[i + stride * 3 - 1])
-                self.colliders.append(Triangle(v1, v2, v3))
+                
+                tri = Triangle(v1, v2, v3)
+                
+                if name in door_materials:
+                    if name not in self.door_source_triangles:
+                        self.door_source_triangles[name] = []
+                    self.door_source_triangles[name].append(tri)
+                else:
+                    self.colliders.append(tri)
+                    self._add_to_grid(tri)
             
-        print(f"Model loaded! Collision polygons generated: {len(self.colliders)}")
+        print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
+
+    def _add_to_grid(self, tri):
+        """Helper to inject a triangle into the pre-computed spatial partitioning hash map"""
+        start_x = int(tri.min_x // self.grid_size)
+        end_x = int(tri.max_x // self.grid_size)
+        start_z = int(tri.min_z // self.grid_size)
+        end_z = int(tri.max_z // self.grid_size)
+        
+        for gx in range(start_x, end_x + 1):
+            for gz in range(start_z, end_z + 1):
+                cell_key = (gx, gz)
+                if cell_key not in self.spatial_grid:
+                    self.spatial_grid[cell_key] = []
+                self.spatial_grid[cell_key].append(tri)
 
     def draw(self):
-        # Enable array and 2D texture usage
         glEnableClientState(GL_VERTEX_ARRAY)
-        glEnable(GL_TEXTURE_2D)
-        
-        # Prevent the default white color from tinting our texture
-        glColor3f(1.0, 1.0, 1.0) 
-        
-        # Bind the manual texture (if any) BEFORE drawing everything
         if self.global_texture_id is not None:
+            glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self.global_texture_id)
-        else:
-            glBindTexture(GL_TEXTURE_2D, 0)
+            glColor3f(1.0, 1.0, 1.0)
 
-        for mesh in self.meshes:
-            glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
-            glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
+        for nombre_material, lista_meshes in self.materiales.items():
+            for mesh in lista_meshes:
+                glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
+                glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
             
-        # Disable states when finished drawing
         glDisable(GL_TEXTURE_2D)
         glDisableClientState(GL_VERTEX_ARRAY)
+
+    def draw_material(self, nombre_material):
+        if nombre_material not in self.materiales:
+            return
+            
+        glEnableClientState(GL_VERTEX_ARRAY)
+        if self.global_texture_id is not None:
+            glEnable(GL_TEXTURE_2D)
+            glBindTexture(GL_TEXTURE_2D, self.global_texture_id)
+            glColor3f(1.0, 1.0, 1.0)
+
+        for mesh in self.materiales[nombre_material]:
+            glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
+            glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
+
+        glDisableClientState(GL_VERTEX_ARRAY)
+
+    def get_close_walls(self, px, pz, radius=2.0):
+        close_walls = []
+        start_x = int((px - radius) // self.grid_size)
+        end_x = int((px + radius) // self.grid_size)
+        start_z = int((pz - radius) // self.grid_size)
+        end_z = int((pz + radius) // self.grid_size)
+        
+        for gx in range(start_x, end_x + 1):
+            for gz in range(start_z, end_z + 1):
+                cell_key = (gx, gz)
+                if cell_key in self.spatial_grid:
+                    close_walls.extend(self.spatial_grid[cell_key])
+        return close_walls

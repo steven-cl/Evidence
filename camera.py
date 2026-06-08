@@ -29,12 +29,13 @@ class CameraFPS:
         # Adjustable control parameters
         self.speed = 4.0        # Detective walking speed
         self.sensitivity = 0.1  # Mouse sensitivity
+        self.jump_force = 2.5
         
         # --- PHYSICS PARAMETERS ---
         self.velocity_y = 0.0
         self.gravity = 9.8
         self.radius = 0.32        # Detective thickness
-        self.eye_height = 1.65    # Eye height
+        self.eye_height = 1.60    # Eye height
         self.speed = 4.0        # Walk faster now (12.0)
 
         # Update initial view vectors
@@ -79,7 +80,7 @@ class CameraFPS:
         Captures relative mouse movement and rotates the camera.
         """
         # Capture how much the mouse moved since the previous frame
-        dx, dy = pygame.mouse.get_rel()
+        #dx, dy = pygame.mouse.get_rel()
 
         # Apply sensitivity
         self.yaw += dx * self.sensitivity
@@ -104,33 +105,43 @@ class CameraFPS:
         # 2. Distance to plane (with sign)
         dist = glm.dot(sphere_center - tri.a, tri.normal)
         
-        # Detect if it is wall (vertical) or floor/ceiling (horizontal)
         is_wall = abs(tri.normal.y) < 0.5
         is_floor = tri.normal.y >= 0.5
         is_ceiling = tri.normal.y <= -0.5
         
+        has_double_sided = getattr(tri, 'is_double_sided', True)
+        is_climbable = getattr(tri, 'is_climbable', False) # Check if this plane is jumpable
+
         if is_wall:
-            # IF IT IS A WALL: two-sided collision
-            if abs(dist) > self.radius:
-                return None
+            if has_double_sided:
+                if abs(dist) > self.radius:
+                    return None
+            else:
+                if dist > self.radius or dist < 0.0:
+                    return None
         else:
-            # --- THE FIX FOR PHYSICS EXPLOSIONS ---
+            # --- FLOOR AND CEILING PHYSICS PASS ---
             if is_floor:
-                # Only the FEET interact with floors.
-                # Prevents your waist or head from being "pulled" up onto the table.
                 if sphere_type != 'feet':
                     return None
                 
-                # Tolerance for falls (lag)
-                if dist > self.radius or dist < -0.6:
-                    return None
-            
+                if has_double_sided:
+                    # Generic structure stepping constraints
+                    if dist > self.radius or dist < 0.0:
+                        return None
+                else:
+                    # --- FIXED: STEP CLIMBING FOR INTERACTIVE FURNITURE ---
+                    if is_climbable:
+                        # Allow step resolution up to 50cm deep, pulling the player up on contact
+                        if dist > self.radius or dist < -0.5:
+                            return None
+                    else:
+                        # Standard solid bounding box roof constraint
+                        if dist > self.radius or dist < 0.0:
+                            return None
             elif is_ceiling:
-                # Only the HEAD interacts with ceilings.
                 if sphere_type != 'head':
                     return None
-                
-                # Do not interact if we are above the ceiling
                 if dist > self.radius or dist < 0:
                     return None
                 
@@ -150,13 +161,19 @@ class CameraFPS:
             glm.dot(tri.normal, glm.cross(edge1, c1)) >= 0 and
             glm.dot(tri.normal, glm.cross(edge2, c2)) >= 0):
             
-            # 5. PHYSICS PUSH
-            if is_wall and dist < 0:
-                # If we collide with the back of a wall, push outward
-                penetration = self.radius - abs(dist)
-                return -tri.normal * penetration
+            # 5. PHYSICS PUSH REACTION
+            if is_wall:
+                if has_double_sided and dist < 0:
+                    penetration = self.radius - abs(dist)
+                    push = -tri.normal * penetration
+                else:
+                    penetration = self.radius - dist
+                    push = tri.normal * penetration
+                
+                push.y = 0.0 
+                return push
             else:
-                # We collide head-on (or it is floor/ceiling)
+                # Floor or ceiling push (Handles snapping up when stepping onto climbable props)
                 penetration = self.radius - dist
                 return tri.normal * penetration
                 
@@ -182,49 +199,52 @@ class CameraFPS:
         if keys[pygame.K_d]:
             next_x -= self.right_x * velocity
             next_z -= self.right_z * velocity
+            
+        if keys[pygame.K_SPACE] and self.is_grounded:
+            self.velocity_y = self.jump_force
+            self.is_grounded = False # Despegamos instantáneamente del suelo
 
         self.velocity_y -= self.gravity * dt
         next_y = self.pos_y + (self.velocity_y * dt)
 
-        # ---------------------------------------------------------
-        # 2. COMPLETE SNOWMAN (3 Spheres)
-        # ---------------------------------------------------------
-        feet_pos = glm.vec3(next_x, next_y - self.eye_height + self.radius, next_z)
-        torso_pos = glm.vec3(next_x, next_y - (self.eye_height / 2), next_z)
-        head_pos = glm.vec3(next_x, next_y, next_z)
+        # 2. COMPLETE SNOWMAN SETUP
+        self.feet_pos = glm.vec3(next_x, next_y - self.eye_height + self.radius, next_z)
+        self.torso_pos = glm.vec3(next_x, next_y - (self.eye_height / 2), next_z)
+        self.head_pos = glm.vec3(next_x, next_y, next_z)
 
-        # 3. Calculate physics by passing the "Role" of each sphere
-        is_grounded = False
+        self.is_grounded = False
         
-        for tri in colliders:
-            # Evaluate Feet (Passing 'feet')
-            push_feet = self.check_sphere_triangle(feet_pos, tri, 'feet')
-            if push_feet is not None:
-                feet_pos += push_feet
-                torso_pos += push_feet
-                head_pos += push_feet
-                if tri.normal.y > 0.5:
-                    is_grounded = True
-                    self.velocity_y = 0.0
+        # --- CRUCIAL FIX: Multi-pass relaxation loop to completely prevent corner-clipping ---
+        for _ in range(2): 
+            for tri in colliders:
+                # Evaluate Feet (Passing 'feet')
+                push_feet = self.check_sphere_triangle(self.feet_pos, tri, 'feet')
+                if push_feet is not None:
+                    self.feet_pos += push_feet
+                    self.torso_pos += push_feet
+                    self.head_pos += push_feet
+                    if tri.normal.y > 0.5:
+                        self.is_grounded = True
+                        self.velocity_y = 0.0
 
-            # Evaluate Torso (Passing 'torso')
-            push_torso = self.check_sphere_triangle(torso_pos, tri, 'torso')
-            if push_torso is not None:
-                feet_pos += push_torso
-                torso_pos += push_torso
-                head_pos += push_torso
+                # Evaluate Torso (Passing 'torso')
+                push_torso = self.check_sphere_triangle(self.torso_pos, tri, 'torso')
+                if push_torso is not None:
+                    self.feet_pos += push_torso
+                    self.torso_pos += push_torso
+                    self.head_pos += push_torso
 
-            # Evaluate Head (Passing 'head')
-            push_head = self.check_sphere_triangle(head_pos, tri, 'head')
-            if push_head is not None:
-                feet_pos += push_head
-                torso_pos += push_head
-                head_pos += push_head
+                # Evaluate Head (Passing 'head')
+                push_head = self.check_sphere_triangle(self.head_pos, tri, 'head')
+                if push_head is not None:
+                    self.feet_pos += push_head
+                    self.torso_pos += push_head
+                    self.head_pos += push_head
 
-        # 4. APPLY the movement
-        self.pos_x = feet_pos.x
-        self.pos_z = feet_pos.z
-        self.pos_y = feet_pos.y + self.eye_height - self.radius
+        # 4. APPLY the finalized and validated relaxation vectors
+        self.pos_x = self.feet_pos.x
+        self.pos_z = self.feet_pos.z
+        self.pos_y = self.feet_pos.y + self.eye_height - self.radius
 
     def update_view(self):
         """

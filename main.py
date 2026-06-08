@@ -8,6 +8,7 @@ from OpenGL.GLU import *
 from menu import MainMenu
 from camera import CameraFPS
 from skybox import Skybox
+from load_screen import render_loading_screen
 from scene_loader import (
     load_scene_assets,
     toggle_nearest_visible_door,
@@ -161,6 +162,8 @@ def main():
     menu = MainMenu(screen_width, screen_height)
     camera = setup_camera(screen_width, screen_height)
     skybox = setup_skybox()
+    
+    render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
     # Enable depth testing
     glEnable(GL_DEPTH_TEST)
@@ -168,6 +171,8 @@ def main():
     setup_fog()
 
     house, config_visual, setting_doors, door_materials = load_scene_assets()
+    
+    render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
 
     clock = pygame.time.Clock()
     running = True
