@@ -31,6 +31,11 @@ class Skybox:
 
     def draw(self):
         """Draws the skybox cube using the standard universal OpenGL mapping"""
+
+        #we added this 2 lines to avoid an eclipsed skybox
+        glColor3f(1.0, 1.0, 1.0)
+        glDisable(GL_LIGHTING)
+
         glEnable(GL_TEXTURE_2D)
         size = 10.0
 

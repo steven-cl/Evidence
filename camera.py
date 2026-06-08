@@ -73,7 +73,7 @@ class CameraFPS:
         """
         # Apply orientation updates scaled by internal movement sensitivity factor
         self.yaw += dx * self.sensitivity
-        self.pitch -= dy * self.sensitivity  # Inverted for standard FPS look behavior
+        self.pitch -= dy * self.sensitivity  # Inverted for standard camera behavior
 
         # Clamp vertical viewing pitch dynamics to prevent full camera inversion inversion
         if self.pitch > 89.0:
