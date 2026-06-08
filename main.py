@@ -103,6 +103,9 @@ def main():
         "matMarcoPuerta6": (0.45, 0.24, 0.1),
         "matPuerta6": Texture('source/textures/texture_wood.jpg'),
         "matP6": (0.05, 0.05, 0.05),
+        "matMarcoPuerta7": (0.45, 0.24, 0.1),
+        "matPuerta7": Texture('source/textures/texture_wood.jpg'),
+        "matP7": (0.05, 0.05, 0.05),
         
 
 
@@ -218,6 +221,7 @@ def main():
         Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
         Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
+        Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),# This is our principal door
         #Door("matPuerta6", -2.9858, 1.379, 0.37832, "matP6", -3.7616, 1.0498, 0.45044), Do not activate this one, it will only work with a key
     ]
 
@@ -314,7 +318,15 @@ def main():
         
         # Iterate over each material composing the house
         for name_mat in house.materiales.keys():
-            
+
+            if name_mat in mat_doors:
+                continue
+                
+            if name_mat == "matTerrenoExt":  #This is the plane material, you cant see it but still exist(just to test gravity)
+                continue
+
+            #the 2 if in the bottom control what I said in the previous comment
+
             if name_mat in mat_doors:
                 continue
             
@@ -335,6 +347,9 @@ def main():
                 glDisable(GL_TEXTURE_2D)
                 glBindTexture(GL_TEXTURE_2D, 0)
                 glColor3f(0.6, 0.6, 0.6)
+
+
+        
                 
             # Draw the geometry for this specific material
             house.draw_material(name_mat)
@@ -342,6 +357,8 @@ def main():
         # Drawing every object with them transformation
         for p in settingDoors:
             p.draw(house, config_visual)
+
+            
             
         glPopMatrix()
 
