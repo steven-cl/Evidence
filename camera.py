@@ -27,7 +27,6 @@ class CameraFPS:
         self.right_z = 0.0
 
         # Adjustable control parameters
-        self.speed = 4.0        # Detective walking speed
         self.sensitivity = 0.1  # Mouse sensitivity
         self.jump_force = 2.5
         
@@ -36,7 +35,7 @@ class CameraFPS:
         self.gravity = 9.8
         self.radius = 0.32        # Detective thickness
         self.eye_height = 1.60    # Eye height
-        self.speed = 4.0        # Walk faster now (12.0)
+        self.speed = 4.0        # Adjusted walking speed
 
         # Update initial view vectors
         self.update_camera_vectors()
@@ -96,7 +95,7 @@ class CameraFPS:
         self.update_camera_vectors()
         
     def check_sphere_triangle(self, sphere_center, tri, sphere_type):
-        # 1. EARLY OUT (Optimization to not lose FPS)
+        # 1. Early out optimization to maintain performance
         if (sphere_center.x < tri.min_x or sphere_center.x > tri.max_x or
             sphere_center.y < tri.min_y or sphere_center.y > tri.max_y or
             sphere_center.z < tri.min_z or sphere_center.z > tri.max_z):
@@ -130,7 +129,7 @@ class CameraFPS:
                     if dist > self.radius or dist < 0.0:
                         return None
                 else:
-                    # --- FIXED: STEP CLIMBING FOR INTERACTIVE FURNITURE ---
+                    # Step climbing resolution for climbable interactive objects
                     if is_climbable:
                         # Allow step resolution up to 50cm deep, pulling the player up on contact
                         if dist > self.radius or dist < -0.5:
@@ -202,19 +201,19 @@ class CameraFPS:
             
         if keys[pygame.K_SPACE] and self.is_grounded:
             self.velocity_y = self.jump_force
-            self.is_grounded = False # Despegamos instantáneamente del suelo
+            self.is_grounded = False # Detach from the ground immediately upon jumping
 
         self.velocity_y -= self.gravity * dt
         next_y = self.pos_y + (self.velocity_y * dt)
 
-        # 2. COMPLETE SNOWMAN SETUP
+        # 2. Define stacked bounding spheres for collision detection (feet, torso, head)
         self.feet_pos = glm.vec3(next_x, next_y - self.eye_height + self.radius, next_z)
         self.torso_pos = glm.vec3(next_x, next_y - (self.eye_height / 2), next_z)
         self.head_pos = glm.vec3(next_x, next_y, next_z)
 
         self.is_grounded = False
         
-        # --- CRUCIAL FIX: Multi-pass relaxation loop to completely prevent corner-clipping ---
+        # 3. Multi-pass relaxation loop to prevent corner-clipping
         for _ in range(2): 
             for tri in colliders:
                 # Evaluate Feet (Passing 'feet')
@@ -241,7 +240,7 @@ class CameraFPS:
                     self.torso_pos += push_head
                     self.head_pos += push_head
 
-        # 4. APPLY the finalized and validated relaxation vectors
+        # 4. Apply the finalized and validated relaxation vectors
         self.pos_x = self.feet_pos.x
         self.pos_z = self.feet_pos.z
         self.pos_y = self.feet_pos.y + self.eye_height - self.radius

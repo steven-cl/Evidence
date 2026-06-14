@@ -1,4 +1,3 @@
-import os
 import pygame
 from OpenGL.GL import *
 
@@ -13,7 +12,7 @@ class MainMenu:
         self.selected_index = 0
         
         self.volume = 80       
-        # Nuevo estado para el tipo de pantalla
+        # Display mode state initialization
         self.is_fullscreen = False
         self.options_selection = 0
         self.options_fields = ["Volume", "Display", "Return to Case File"]
@@ -104,14 +103,17 @@ class MainMenu:
                 self.apply_display_mode(camera)
 
     def apply_display_mode(self, camera):
-        """Alterna entre pantalla completa y ventana sin destruir las texturas."""
+        """
+        Toggles between fullscreen and windowed display modes 
+        while preserving the active OpenGL context and textures.
+        """
         pygame.display.toggle_fullscreen()
         
-        # Leemos el tamaño de la ventana RESULTANTE (no el del monitor físico)
+        # Retrieve the dimensions of the resulting surface to account for window borders
         surface = pygame.display.get_surface()
         new_w, new_h = surface.get_width(), surface.get_height()
         
-        # Ajustamos el motor a la nueva resolución de la ventana
+        # Update the OpenGL viewport and camera projection to the new resolution
         glViewport(0, 0, new_w, new_h)
         camera.width = new_w
         camera.height = new_h
@@ -208,7 +210,7 @@ class MainMenu:
     def _render_options_menu(self):
         self.draw_text_gl(self.center_x, self.center_y - 120, "FIELD ADJUSTMENTS", self.font_title, (139, 0, 0))
 
-        # Texto dinámico para el modo de visualización
+        # Dynamic text rendering for the current display mode
         display_str = "Full Screen" if self.is_fullscreen else "Windowed"
 
         opt_text = [

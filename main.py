@@ -1,5 +1,4 @@
 import os
-import time
 import json
 import pygame
 from pygame.locals import *
@@ -21,14 +20,14 @@ from scene_loader import (
 )
 
 # ==========================================
-# --- MOTOR DE PERSISTENCIA (GUARDADO) ---
+# --- PERSISTENCE ENGINE (SAVING) ---
 # ==========================================
 SETTINGS_FILE = "settings.json"
 
 def load_settings():
-    """Carga los ajustes previos. Si es la primera vez, devuelve valores por defecto."""
+    """Loads previous settings. If no file is found, returns default values."""
     default_settings = {
-        "width": 0,          # 0 significa "No configurado, usar maximizado"
+        "width": 0,          # 0 indicates "Not configured, default to maximized"
         "height": 0,
         "is_fullscreen": False,
         "volume": 80
@@ -42,7 +41,7 @@ def load_settings():
     return default_settings
 
 def save_settings(camera, menu):
-    """Guarda el estado exacto de la ventana y el menú antes de cerrar el juego."""
+    """Saves the exact state of the window and menu configuration before application exit."""
     settings = {
         "width": camera.width,
         "height": camera.height,
@@ -53,7 +52,7 @@ def save_settings(camera, menu):
         with open(SETTINGS_FILE, "w") as f:
             json.dump(settings, f)
     except Exception as e:
-        print(f"Error guardando ajustes: {e}")
+        print(f"Error saving settings: {e}")
 # ==========================================
 
 class DebugState:
@@ -157,7 +156,7 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     
     glColor4f(1.0, 1.0, 1.0, 1.0) 
     
-    # 1. INDICADOR DE PAUSA 
+    # 1. PAUSE INDICATOR 
     pause_text = "[ESC] Pause"
     tex_p, w_p, h_p = create_shadowed_text_texture(pause_text, _ui_font, (220, 220, 220))
     
@@ -170,7 +169,7 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glEnd()
     glDeleteTextures([tex_p])
     
-    # 2. TEMPORIZADOR CRONÓMETRO 
+    # 2. COUNTDOWN TIMER 
     minutes = int(remaining_time) // 60
     seconds = int(remaining_time) % 60
     timer_text = f"{minutes:02d}:{seconds:02d}"
@@ -189,7 +188,7 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glEnd()
     glDeleteTextures([tex_t])
 
-    # 3. INDICADOR DE INTERACCIÓN (Puertas)
+    # 3. INTERACTION INDICATOR (Doors)
     if target_door:
         is_open = getattr(target_door, 'is_open', False)
         action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
@@ -332,7 +331,9 @@ def setup_fog():
     glHint(GL_FOG_HINT, GL_NICEST)
 
 def setup_display():
-    os.environ['SDL_VIDEO_CENTERED'] = '1'
+    
+    os.environ['SDL_VIDEO_CENTERED'] = "mouse"
+    
     pygame.init()
     
     settings = load_settings()
@@ -352,9 +353,6 @@ def setup_display():
         
     pygame.display.set_mode((screen_width, screen_height), flags)
     pygame.display.set_caption("Evidence - Resolve the Mystery")
-    
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
     
     return screen_width, screen_height, settings
 
@@ -429,29 +427,7 @@ def handle_events(menu, camera, setting_doors, house, debug_state):
 
     return True
 
-def render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt):
-    glDisable(GL_DEPTH_TEST)
-    glDisable(GL_FOG)
-
-    glMatrixMode(GL_MODELVIEW)
-    glLoadIdentity()
-
-    gluLookAt(
-        0.0, 0.0, 0.0,
-        camera.front_x, camera.front_y, camera.front_z,
-        0.0, 1.0, 0.0,
-    )
-    skybox.draw()
-
-    glEnable(GL_DEPTH_TEST)
-    glEnable(GL_FOG)
-
-    camera.update_view()
-    update_doors(setting_doors, dt)
-    draw_static_model(house, config_visual, door_materials)
-    draw_doors(setting_doors, house, config_visual)
-
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time):
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders):
     glClearColor(0.1, 0.1, 0.15, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -466,12 +442,57 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         dx, dy = pygame.mouse.get_rel()
         camera.process_mouse(dx, dy) 
         
-        frame_colliders = list(house.colliders)
+        # --- SPATIAL PARTITIONING: GRID-BASED COLLISION CULLING ---
+        CELL_SIZE = 2.0 
+
+        # 1. Identify the grid cell currently occupied by the player
+        cell_x = int(camera.pos_x // CELL_SIZE)
+        cell_z = int(camera.pos_z // CELL_SIZE)
+
+        # 2. Use a set to collect nearby triangles to prevent duplicates and optimize lookup performance
+        nearby_triangles = set()
+
+        # 3. Query the current cell and the 8 surrounding cells (9 cells total)
+        for x in range(cell_x - 1, cell_x + 2):
+            for z in range(cell_z - 1, cell_z + 2):
+                cell_key = (x, z)
+                if cell_key in house.grid:
+                    # house.grid returns a list of triangles within the queried cell
+                    nearby_triangles.update(house.grid[cell_key])
+
+        # 4. Convert the set of nearby colliders into a list for processing
+        frame_colliders = list(nearby_triangles)
+
+        # 5. Append dynamic door colliders to the processing list
         for door in setting_doors:
             frame_colliders.extend(door.get_transformed_triangles(house))
-        
+
+        # --- EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED COLLIDERS ---
         camera.process_keyboard(dt, frame_colliders)
-        render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt)
+        
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_FOG)
+
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        gluLookAt(
+            0.0, 0.0, 0.0,
+            camera.front_x, camera.front_y, camera.front_z,
+            0.0, 1.0, 0.0,
+        )
+        skybox.draw()
+
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_FOG)
+
+        camera.update_view()
+        update_doors(setting_doors, dt)
+        
+        try:
+            glCallList(house_display_list)
+            draw_doors(setting_doors, house, config_visual)
+        except OpenGL.error.Error:
+            pass # The OpenGL context is resetting; ignore this frame to prevent crashing
 
         target_door = get_looked_at_door(setting_doors, house, camera)
 
@@ -526,6 +547,17 @@ def main():
 
     house, config_visual, setting_doors, door_materials = load_scene_assets()
     
+    static_colliders = list(house.colliders)
+    
+    # ==============================================================
+    # --- RENDER OPTIMIZATION: OPENGL DISPLAY LISTS ---
+    # Compile the static geometry of the house directly into VRAM to drastically reduce draw calls
+    house_display_list = glGenLists(1)
+    glNewList(house_display_list, GL_COMPILE)
+    draw_static_model(house, config_visual, door_materials)
+    glEndList()
+    # ==============================================================
+    
     render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
     
     pygame.event.set_allowed(None) 
@@ -540,6 +572,7 @@ def main():
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05)
 
+        pygame.event.pump()
         running = handle_events(menu, camera, setting_doors, house, debug_state)
         
         if running and menu.state == 'GAME':
@@ -549,7 +582,7 @@ def main():
                 running = False 
         
         if running:
-            render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time)
+            render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders)
 
     save_settings(camera, menu)
     pygame.quit()

@@ -30,7 +30,7 @@ class Triangle:
         self.b = glm.vec3(v2)
         self.c = glm.vec3(v3)
         self.is_double_sided = is_double_sided
-        self.is_climbable = False # Propiedad para poder saltar sobre objetos
+        self.is_climbable = False # Property to allow jumping over objects
         
         cross_prod = glm.cross(self.b - self.a, self.c - self.a)
         if glm.length(cross_prod) > 0.0001:
@@ -54,6 +54,7 @@ class Model3D:
         self.materiales = {}
         self.colliders = [] 
         self.door_source_triangles = {} 
+        self.grid = {}
         
         self.grid_size = 3.0  
         self.spatial_grid = {} 
@@ -101,7 +102,7 @@ class Model3D:
             self.materiales[name].append(mesh_info)
 
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
-            # [RESTAURADO] Sin cocina ni gabinete para evitar el bloqueo del pasillo
+            # Excluded kitchen and cabinet collisions to prevent hallway blockage
             FURNITURE_KEYWORDS = ["lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno"]
             
             if any(kw in name.lower() for kw in FURNITURE_KEYWORDS):
@@ -120,13 +121,13 @@ class Model3D:
                     if z < b_min_z: b_min_z = z
                     if z > b_max_z: b_max_z = z
                 
-                # [RESTAURADO] Márgenes de ensanchamiento y reducción
+                # Bounding box expansion and reduction margins
                 if "lamp" in name.lower():
                     padding = 0.12 
                     b_min_x -= padding; b_max_x += padding
                     b_min_z -= padding; b_max_z += padding
                 elif any(kw in name.lower() for kw in ["mesa", "comedor", "silla"]):
-                    inset = 0.08 # Achicamos 8cm para abrir el pasillo de la cocina
+                    inset = 0.08 # Reduced by 8cm to widen the kitchen hallway clearance
                     b_min_x += inset; b_max_x -= inset
                     b_min_z += inset; b_max_z -= inset
                 
@@ -148,7 +149,7 @@ class Model3D:
                     Triangle(c000, c100, c001, is_double_sided=False), Triangle(c101, c001, c100, is_double_sided=False)  
                 ]
                 
-                # [RESTAURADO] Habilitamos el salto sobre la mesita de la sala
+                # Enable jumping capabilities over the living room table
                 if "mesasala" in name.lower():
                     for tri in box_triangles:
                         tri.is_climbable = True
@@ -158,7 +159,7 @@ class Model3D:
                     self._add_to_grid(tri)
                 continue 
 
-            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", "perilla", "deco", "luz", "jarron"])
+            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", "perilla", "deco", "luz", "jarron", "techo"])
             if is_ignored_prop:
                 continue 
 
@@ -180,25 +181,27 @@ class Model3D:
                     self.colliders.append(tri)
                     self._add_to_grid(tri)
                 
-                # --- EL FIX ANTI-CRASHEO (NO RESPONDE) ---
-                # Cada 1000 vértices, le avisamos al sistema operativo que seguimos vivos
-                if i % 1000 == 0:
+                # Prevent OS application unresponsiveness warnings by pumping the event queue during heavy vertex processing
+                if i % 500 == 0:
                     pygame.event.pump()
             
         print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
 
     def _add_to_grid(self, tri):
-        start_x = int(tri.min_x // self.grid_size)
-        end_x = int(tri.max_x // self.grid_size)
-        start_z = int(tri.min_z // self.grid_size)
-        end_z = int(tri.max_z // self.grid_size)
-        
-        for gx in range(start_x, end_x + 1):
-            for gz in range(start_z, end_z + 1):
-                cell_key = (gx, gz)
-                if cell_key not in self.spatial_grid:
-                    self.spatial_grid[cell_key] = []
-                self.spatial_grid[cell_key].append(tri)
+        # Define the cell size for spatial partitioning (e.g., 2.0 units)
+        cell_size = 2.0
+        # Calculate which spatial grid cells the triangle overlaps
+        min_x = int(min(tri.a.x, tri.b.x, tri.c.x) // cell_size)
+        max_x = int(max(tri.a.x, tri.b.x, tri.c.x) // cell_size)
+        min_z = int(min(tri.a.z, tri.b.z, tri.c.z) // cell_size)
+        max_z = int(max(tri.a.z, tri.b.z, tri.c.z) // cell_size)
+
+        for x in range(min_x, max_x + 1):
+            for z in range(min_z, max_z + 1):
+                key = (x, z)
+                if key not in self.grid:
+                    self.grid[key] = []
+                self.grid[key].append(tri)
 
     def draw(self):
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -218,16 +221,22 @@ class Model3D:
     def draw_material(self, nombre_material):
         if nombre_material not in self.materiales:
             return
+        
+        if glGetError() == GL_INVALID_OPERATION:
+            return
             
         glEnableClientState(GL_VERTEX_ARRAY)
         if self.global_texture_id is not None:
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self.global_texture_id)
             glColor3f(1.0, 1.0, 1.0)
-
-        for mesh in self.materiales[nombre_material]:
-            glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
-            glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
+        
+        try:
+            for mesh in self.materiales[nombre_material]:
+                glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
+                glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
+        except Exception:
+            pass
 
         glDisableClientState(GL_VERTEX_ARRAY)
 
