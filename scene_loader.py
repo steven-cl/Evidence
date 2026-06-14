@@ -155,18 +155,27 @@ def load_scene_assets():
 
 
 def toggle_nearest_visible_door(setting_doors, camera, max_distance=2.0):
+    """
+    Evaluates nearby interactive items to trigger the closest door animation sequence.
+    Returns True if an interaction successfully occurred, otherwise returns False.
+    """
     closest_door = None
     min_dist = max_distance
 
     for door in setting_doors:
+        # Check if the camera is looking at the door and within view angles
         if door.doorAction(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
             dist = door.get_distance(camera.pos_x, camera.pos_z)
             if dist < min_dist:
                 min_dist = dist
                 closest_door = door
 
+    # If a valid door structure object is within range bounds, execute toggle sequence
     if closest_door:
         closest_door.toggle()
+        return True  # Interaction successfully verified and triggered
+
+    return False  # No interactive door components detected within range boundaries
 
 
 def apply_material(material_name, config_visual):
