@@ -20,10 +20,8 @@ def draw_text_gl(x, y, text, font, color):
     text_surface = font.render(text, True, color)
     w, h = text_surface.get_size()
     
-    # --- EL FIX ESTÁ AQUÍ ---
-    # Cambiamos 'True' por 'False'. Esto mantiene el orden natural de lectura de Pygame.
-    # Como nuestras coordenadas de textura de abajo ya están mapeadas correctamente,
-    # el texto se dibujará perfectamente derecho.
+    # Disable surface flipping during byte conversion to maintain Pygame's natural byte order.
+    # The texture coordinates applied later correctly map this data to render the text upright.
     text_data = pygame.image.tobytes(text_surface, "RGBA", False)
 
     tex_id = glGenTextures(1)
@@ -50,13 +48,14 @@ def draw_text_gl(x, y, text, font, color):
 
 def render_loading_screen(width, height, duration=1.5, start_progress=0.0, target_progress=1.0):
     """
-    Anima la barra desde un punto A hasta un punto B durante los segundos indicados.
+    Animates the loading bar from a starting progress value to a target progress value 
+    over the specified duration.
     """
     init_fonts()
     start_time = time.time()
     
     while True:
-        # Mantener la ventana receptiva para que el SO no lance advertencias
+        # Keep the window responsive to prevent the OS from throwing "Not Responding" warnings
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -68,7 +67,7 @@ def render_loading_screen(width, height, duration=1.5, start_progress=0.0, targe
         if t > 1.0:
             t = 1.0
             
-        # Interpolación matemática del progreso
+        # Linearly interpolate the loading progress
         progress = start_progress + (target_progress - start_progress) * t
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)

@@ -5,7 +5,7 @@ from pared import Texture
 import glm
 
 class Door:
-    # Added open_direction (1 or -1) and knob_axis ('z' or 'x')
+    # Defines the opening direction (1 or -1) and the rotation axis for the knob ('z' or 'x')
     def __init__(self, mat_puerta, px, py, pz, mat_perilla, kx, ky, kz, dir_apertura=1.0, eje_perilla='z'):
         self.mat = mat_puerta
         self.px = px
@@ -28,56 +28,54 @@ class Door:
         
         
     def get_distance(self, player_x, player_z):
-        
+        # Calculate the center point of the door
         cPoint_x = (self.px + self.kx) / 2
         cPoint_z = (self.pz + self.kz) / 2
         return math.hypot(cPoint_x - player_x, cPoint_z - player_z)
     
     
     def doorAction(self, player_x, player_z, cam_dir_x, cam_dir_z):
-
-        #we calculate the center of the door
+        # Calculate the center point of the door
         cPoint_x = (self.px + self.kx) / 2
         cPoint_z = (self.pz + self.kz) / 2
         
-        # Distance is measured
+        # Measure the distance between the player and the door center
         dist = math.hypot(cPoint_x - player_x, cPoint_z - player_z)
         if dist > 2.0:
             return False
             
-        #vector form player to the doors
+        # Calculate the directional vector from the player to the door
         if dist == 0: 
             return False
         vec_x = (cPoint_x - player_x) / dist
         vec_z = (cPoint_z - player_z) / dist
         
-        # we normalize the camera view
+        # Normalize the camera direction vector
         cam_length = math.hypot(cam_dir_x, cam_dir_z)
         if cam_length == 0:
             return False
         cam_dir_x /= cam_length
         cam_dir_z /= cam_length
         
-        #Dot Product
+        # Compute the dot product between the view vector and the door vector
         dot_product = (vec_x * cam_dir_x) + (vec_z * cam_dir_z)
-        #if > 0.85 it is within your fov
+        
+        # Return True if the door is within the player's field of view
         return dot_product > 0.85
     
     
     def toggle(self):
         self.is_open = not self.is_open
-        # just to know if we are in or out
+        # Set the target rotation angle based on the designated opening direction
         self.target = (90.0 * self.dir_apertura) if self.is_open else 0.0
 
 
     def update(self, dt):
-        #animation
+        # Interpolate the current angle towards the target angle based on delta time
         if self.angle < self.target:
             self.angle = min(self.angle + self.speed * dt, self.target)
         elif self.angle > self.target:
             self.angle = max(self.angle - self.speed * dt, self.target)
-            
-        
 
 
     def _aplicar_material(self, mat_name, cfg):
@@ -100,7 +98,7 @@ class Door:
     def draw(self, house_model, cfg):
         glPushMatrix()
         
-        #door
+        # Apply transformations and render the main door geometry
         glTranslatef(self.px, self.py, self.pz)
         glRotatef(self.angle, 0, 1, 0)
         glTranslatef(-self.px, -self.py, -self.pz)
@@ -108,7 +106,7 @@ class Door:
         self._aplicar_material(self.mat, cfg)
         house_model.draw_material(self.mat)
         
-        # door object
+        # Apply transformations and render the door knob geometry
         glTranslatef(self.kx, self.ky, self.kz)
         glTranslatef(-self.kx, -self.ky, -self.kz)
         self._aplicar_material(self.mat_perilla, cfg)
@@ -131,9 +129,9 @@ class Door:
         matrix = glm.rotate(matrix, glm.radians(self.angle), glm.vec3(0, 1, 0))
         matrix = glm.translate(matrix, glm.vec3(-self.px, -self.py, -self.pz))
         
-        # FIX: We explicitly tell Pyright that 'tri' is a 'Triangle'
+        # Ensure proper type hinting for the triangle object during iteration
         for tri in house_model.door_source_triangles[self.mat]:
-            tri_obj: Triangle = tri # <-- This line clears the "Unknown" warning immediately!
+            tri_obj: Triangle = tri 
             
             t_a = glm.vec3(matrix * glm.vec4(tri_obj.a, 1.0))
             t_b = glm.vec3(matrix * glm.vec4(tri_obj.b, 1.0))
