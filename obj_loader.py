@@ -179,6 +179,11 @@ class Model3D:
                 else:
                     self.colliders.append(tri)
                     self._add_to_grid(tri)
+                
+                # --- EL FIX ANTI-CRASHEO (NO RESPONDE) ---
+                # Cada 1000 vértices, le avisamos al sistema operativo que seguimos vivos
+                if i % 1000 == 0:
+                    pygame.event.pump()
             
         print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
 

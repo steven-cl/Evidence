@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import pygame
 from pygame.locals import *
 from OpenGL.GL import *
@@ -19,92 +20,50 @@ from scene_loader import (
     draw_doors,
 )
 
-def draw_crosshair(width, height):
-    """
-    Dibuja una mirilla (crosshair) con un contorno negro perfecto en TODOS sus bordes.
-    Utiliza coordenadas absolutas (min, max) para garantizar que las tapas interiores 
-    (las que dan al hueco) también tengan su respectivo contorno negro.
-    """
-    glMatrixMode(GL_PROJECTION)
-    glPushMatrix()
-    glLoadIdentity()
-    glOrtho(0, width, height, 0, -1, 1)
-    
-    glMatrixMode(GL_MODELVIEW)
-    glPushMatrix()
-    glLoadIdentity()
-    
-    glDisable(GL_DEPTH_TEST)
-    glDisable(GL_LIGHTING)
-    glDisable(GL_TEXTURE_2D)
-    glDisable(GL_FOG)
-    
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    
-    cx = width // 2
-    cy = height // 2
-    
-    # --- PARÁMETROS GEOMÉTRICOS ---
-    t = 1.0  # Mitad del grosor de la línea blanca (Total = 2px)
-    s = 8.0  # Longitud del brazo blanco
-    g = 4.0  # Distancia desde el centro hasta donde empieza el brazo (Hueco)
-    o = 1.5  # Grosor del contorno negro (1.5px asegura que cubra perfecto)
-    
-    # Función auxiliar ultra-precisa usando coordenadas (Izquierda, Derecha, Arriba, Abajo)
-    def draw_rect(x1, x2, y1, y2):
-        glBegin(GL_QUADS)
-        glVertex2f(x1, y1)
-        glVertex2f(x2, y1)
-        glVertex2f(x2, y2)
-        glVertex2f(x1, y2)
-        glEnd()
-    
-    # --- PASO 1: CONTORNO NEGRO (Se dibuja más grande en TODAS las direcciones) ---
-    glColor4f(0.0, 0.0, 0.0, 0.85) 
-    
-    # Brazo Izquierdo (Nota cómo 'cx - g + o' empuja la sombra hacia adentro del hueco)
-    draw_rect(cx - g - s - o, cx - g + o, cy - t - o, cy + t + o)
-    # Brazo Derecho
-    draw_rect(cx + g - o, cx + g + s + o, cy - t - o, cy + t + o)
-    # Brazo Superior
-    draw_rect(cx - t - o, cx + t + o, cy - g - s - o, cy - g + o)
-    # Brazo Inferior
-    draw_rect(cx - t - o, cx + t + o, cy + g - o, cy + g + s + o)
-    
-    # --- PASO 2: MIRA BLANCA (Se dibuja exactamente en su tamaño nominal) ---
-    glColor4f(1.0, 1.0, 1.0, 0.95)
-    
-    # Brazo Izquierdo
-    draw_rect(cx - g - s, cx - g, cy - t, cy + t)
-    # Brazo Derecho
-    draw_rect(cx + g, cx + g + s, cy - t, cy + t)
-    # Brazo Superior
-    draw_rect(cx - t, cx + t, cy - g - s, cy - g)
-    # Brazo Inferior
-    draw_rect(cx - t, cx + t, cy + g, cy + g + s)
-    
-    # --- RESTAURACIÓN ---
-    glDisable(GL_BLEND)
-    glEnable(GL_FOG)
-    glEnable(GL_TEXTURE_2D)
-    glEnable(GL_DEPTH_TEST)
-    
-    glMatrixMode(GL_PROJECTION)
-    glPopMatrix()
-    glMatrixMode(GL_MODELVIEW)
-    glPopMatrix()
+# ==========================================
+# --- MOTOR DE PERSISTENCIA (GUARDADO) ---
+# ==========================================
+SETTINGS_FILE = "settings.json"
 
+def load_settings():
+    """Carga los ajustes previos. Si es la primera vez, devuelve valores por defecto."""
+    default_settings = {
+        "width": 0,          # 0 significa "No configurado, usar maximizado"
+        "height": 0,
+        "is_fullscreen": False,
+        "volume": 80
+    }
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return default_settings
+
+def save_settings(camera, menu):
+    """Guarda el estado exacto de la ventana y el menú antes de cerrar el juego."""
+    settings = {
+        "width": camera.width,
+        "height": camera.height,
+        "is_fullscreen": getattr(menu, 'is_fullscreen', False),
+        "volume": getattr(menu, 'volume', 80)
+    }
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f)
+    except Exception as e:
+        print(f"Error guardando ajustes: {e}")
 # ==========================================
-# --- SISTEMA DE DEBUG TÁCTICO (F1, F2, F3) ---
-# ==========================================
+
 class DebugState:
     def __init__(self):
-        self.overlay = False   # F1: Bounding boxes y esferas
-        self.hud = False       # F2: Texto en pantalla
-        self.wireframe = False # F3: Modo líneas global
+        self.overlay = False   
+        self.hud = False       
+        self.wireframe = False 
 
 _debug_font = None
+_ui_font = None
 
 def init_fonts():
     global _debug_font, _ui_font
@@ -127,7 +86,7 @@ def init_debug_font():
             _debug_font = pygame.font.Font(None, 24)
 
 def draw_debug_text(x, y, text, color=(0, 255, 0)):
-    global _debug_font
+    init_debug_font()
     text_surface = _debug_font.render(text, True, color)
     w, h = text_surface.get_size()
     text_data = pygame.image.tobytes(text_surface, "RGBA", False)
@@ -154,90 +113,17 @@ def draw_debug_text(x, y, text, color=(0, 255, 0)):
     glDisable(GL_BLEND)
     glDeleteTextures([tex_id])
 
-def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
-    """
-    Dibuja el overlay de físicas (Cajas y Jugador) encima del juego.
-    """
-    glDisable(GL_TEXTURE_2D)
-    glDisable(GL_LIGHTING)
-    glDisable(GL_FOG)
-    glDisable(GL_DEPTH_TEST) # Rayos X
-
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-    glLineWidth(1.5)
-
-    # 1. Colliders
-    glColor3f(0.0, 1.0, 0.0) # Verde
-    glBegin(GL_TRIANGLES)
-    for tri in house.colliders:
-        glVertex3f(tri.a.x, tri.a.y, tri.a.z)
-        glVertex3f(tri.b.x, tri.b.y, tri.b.z)
-        glVertex3f(tri.c.x, tri.c.y, tri.c.z)
-        
-    for door in setting_doors:
-        for tri in door.get_transformed_triangles(house):
-            glVertex3f(tri.a.x, tri.a.y, tri.a.z)
-            glVertex3f(tri.b.x, tri.b.y, tri.b.z)
-            glVertex3f(tri.c.x, tri.c.y, tri.c.z)
-    glEnd()
-
-    # 2. Muñeco de Nieve (Detective)
-    if hasattr(camera, 'feet_pos'):
-        glColor3f(1.0, 0.0, 0.0) # Rojo
-        quadric = gluNewQuadric()
-        gluQuadricDrawStyle(quadric, GLU_LINE)
-
-        '''
-        glPushMatrix()
-        glTranslatef(camera.head_pos.x, camera.head_pos.y, camera.head_pos.z)
-        gluSphere(quadric, camera.radius, 10, 10)
-        glPopMatrix()
-        '''
-
-        glPushMatrix()
-        glTranslatef(camera.torso_pos.x, camera.torso_pos.y, camera.torso_pos.z)
-        gluSphere(quadric, camera.radius, 10, 10)
-        glPopMatrix()
-
-        glPushMatrix()
-        glTranslatef(camera.feet_pos.x, camera.feet_pos.y, camera.feet_pos.z)
-        gluSphere(quadric, camera.radius, 10, 10)
-        glPopMatrix()
-
-        gluDeleteQuadric(quadric)
-        
-        glColor3f(1.0, 1.0, 1.0)
-
-    # --- RESTAURACIÓN INTELIGENTE ---
-    # Respetamos el modo F3. Si estaba encendido, regresamos a LINE, si no, a FILL.
-    if is_wireframe_global:
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-    else:
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-        
-    glEnable(GL_DEPTH_TEST)
-    glEnable(GL_TEXTURE_2D)
-    glEnable(GL_FOG)
-# ==========================================
-
 def create_shadowed_text_texture(text, font, color):
-    """
-    Renderiza texto con una sombra negra dura (Drop Shadow) usando Pygame
-    antes de enviarlo a OpenGL, garantizando legibilidad en cualquier fondo.
-    """
-    # 1. Renderizamos ambos textos
     main_surf = font.render(text, True, color)
-    shadow_surf = font.render(text, True, (10, 10, 10)) # Sombra casi negra
+    shadow_surf = font.render(text, True, (10, 10, 10)) 
     
-    offset = 2 # Píxeles de desplazamiento de la sombra
+    offset = 2 
     w, h = main_surf.get_size()
     
-    # 2. Creamos una superficie transparente para combinarlos
     combined_surf = pygame.Surface((w + offset, h + offset), pygame.SRCALPHA)
-    combined_surf.blit(shadow_surf, (offset, offset)) # Pintamos la sombra primero (fondo)
-    combined_surf.blit(main_surf, (0, 0))             # Pintamos el color encima
+    combined_surf.blit(shadow_surf, (offset, offset)) 
+    combined_surf.blit(main_surf, (0, 0))             
     
-    # 3. Convertimos a textura OpenGL
     text_data = pygame.image.tobytes(combined_surf, "RGBA", False)
     cw, ch = combined_surf.get_size()
     
@@ -250,10 +136,6 @@ def create_shadowed_text_texture(text, font, color):
     return tex_id, cw, ch
 
 def draw_game_ui(width, height, remaining_time, target_door=None):
-    """
-    Dibuja los elementos de la interfaz del gameplay en proyección 2D.
-    Ahora utiliza Drop Shadows para contraste perfecto en cualquier iluminación.
-    """
     init_fonts()
     
     glMatrixMode(GL_PROJECTION)
@@ -273,9 +155,9 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_TEXTURE_2D)
     
-    glColor4f(1.0, 1.0, 1.0, 1.0) # Aseguramos color base puro para la textura
+    glColor4f(1.0, 1.0, 1.0, 1.0) 
     
-    # 1. INDICADOR DE PAUSA (Esquina superior izquierda)
+    # 1. INDICADOR DE PAUSA 
     pause_text = "[ESC] Pause"
     tex_p, w_p, h_p = create_shadowed_text_texture(pause_text, _ui_font, (220, 220, 220))
     
@@ -288,16 +170,14 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glEnd()
     glDeleteTextures([tex_p])
     
-    # 2. TEMPORIZADOR CRONÓMETRO (Esquina superior derecha)
+    # 2. TEMPORIZADOR CRONÓMETRO 
     minutes = int(remaining_time) // 60
     seconds = int(remaining_time) % 60
     timer_text = f"{minutes:02d}:{seconds:02d}"
     
-    # Rojo carmesí si queda < 1 min, de lo contrario blanco grisáceo
     timer_color = (255, 60, 60) if remaining_time < 60.0 else (240, 240, 240)
     tex_t, w_t, h_t = create_shadowed_text_texture(timer_text, _ui_font, timer_color)
     
-    # Alinear dinámicamente a la derecha de la resolución actual
     x_pos_timer = width - w_t - 25
     
     glBindTexture(GL_TEXTURE_2D, tex_t)
@@ -308,19 +188,14 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glTexCoord2f(0, 1); glVertex2f(x_pos_timer, 25 + h_t)
     glEnd()
     glDeleteTextures([tex_t])
-    
-    # 3. INDICADOR DE INTERACCIÓN (Centro superior)
+
+    # 3. INDICADOR DE INTERACCIÓN (Puertas)
     if target_door:
-        # Verificamos si la puerta está abierta o cerrada. 
-        # (Asumo que tu clase Door tiene una variable 'is_open', usamos getattr por seguridad)
         is_open = getattr(target_door, 'is_open', False)
-        
         action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
         
-        # Color blanco puro para el texto de interacción
         tex_i, w_i, h_i = create_shadowed_text_texture(action_text, _ui_font, (255, 255, 255))
         
-        # Centrado horizontal, ligeramente despegado del techo (Y = 40)
         x_pos_interact = (width - w_i) // 2
         y_pos_interact = 40 
         
@@ -333,7 +208,6 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
         glEnd()
         glDeleteTextures([tex_i])
     
-    # Restaurar estados
     glDisable(GL_TEXTURE_2D)
     glDisable(GL_BLEND)
     glEnable(GL_FOG)
@@ -344,6 +218,111 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glMatrixMode(GL_MODELVIEW)
     glPopMatrix()
 
+def draw_crosshair(width, height):
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    glOrtho(0, width, height, 0, -1, 1)
+    
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    
+    glDisable(GL_DEPTH_TEST)
+    glDisable(GL_LIGHTING)
+    glDisable(GL_TEXTURE_2D)
+    glDisable(GL_FOG)
+    
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    
+    cx = width // 2
+    cy = height // 2
+    
+    t = 1.0  
+    s = 8.0  
+    g = 4.0  
+    o = 1.5  
+    
+    def draw_rect(x1, x2, y1, y2):
+        glBegin(GL_QUADS)
+        glVertex2f(x1, y1); glVertex2f(x2, y1)
+        glVertex2f(x2, y2); glVertex2f(x1, y2)
+        glEnd()
+    
+    glColor4f(0.0, 0.0, 0.0, 0.85) 
+    draw_rect(cx - g - s - o, cx - g + o, cy - t - o, cy + t + o)
+    draw_rect(cx + g - o, cx + g + s + o, cy - t - o, cy + t + o)
+    draw_rect(cx - t - o, cx + t + o, cy - g - s - o, cy - g + o)
+    draw_rect(cx - t - o, cx + t + o, cy + g - o, cy + g + s + o)
+    
+    glColor4f(1.0, 1.0, 1.0, 0.95)
+    draw_rect(cx - g - s, cx - g, cy - t, cy + t)
+    draw_rect(cx + g, cx + g + s, cy - t, cy + t)
+    draw_rect(cx - t, cx + t, cy - g - s, cy - g)
+    draw_rect(cx - t, cx + t, cy + g, cy + g + s)
+    
+    glDisable(GL_BLEND)
+    glEnable(GL_FOG)
+    glEnable(GL_TEXTURE_2D)
+    glEnable(GL_DEPTH_TEST)
+    
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+
+def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
+    glDisable(GL_TEXTURE_2D)
+    glDisable(GL_LIGHTING)
+    glDisable(GL_FOG)
+    glDisable(GL_DEPTH_TEST) 
+
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    glLineWidth(1.5)
+
+    glColor3f(0.0, 1.0, 0.0) 
+    glBegin(GL_TRIANGLES)
+    for tri in house.colliders:
+        glVertex3f(tri.a.x, tri.a.y, tri.a.z)
+        glVertex3f(tri.b.x, tri.b.y, tri.b.z)
+        glVertex3f(tri.c.x, tri.c.y, tri.c.z)
+        
+    for door in setting_doors:
+        for tri in door.get_transformed_triangles(house):
+            glVertex3f(tri.a.x, tri.a.y, tri.a.z)
+            glVertex3f(tri.b.x, tri.b.y, tri.b.z)
+            glVertex3f(tri.c.x, tri.c.y, tri.c.z)
+    glEnd()
+
+    if hasattr(camera, 'feet_pos'):
+        glColor3f(1.0, 0.0, 0.0) 
+        quadric = gluNewQuadric()
+        gluQuadricDrawStyle(quadric, GLU_LINE)
+
+        glPushMatrix()
+        glTranslatef(camera.torso_pos.x, camera.torso_pos.y, camera.torso_pos.z)
+        gluSphere(quadric, camera.radius, 10, 10)
+        glPopMatrix()
+
+        glPushMatrix()
+        glTranslatef(camera.feet_pos.x, camera.feet_pos.y, camera.feet_pos.z)
+        gluSphere(quadric, camera.radius, 10, 10)
+        glPopMatrix()
+
+        gluDeleteQuadric(quadric)
+        
+        glColor3f(1.0, 1.0, 1.0)
+
+    if is_wireframe_global:
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    else:
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_TEXTURE_2D)
+    glEnable(GL_FOG)
+
 def setup_fog():
     glEnable(GL_FOG)
     glFogi(GL_FOG_MODE, GL_EXP2)
@@ -353,20 +332,31 @@ def setup_fog():
     glHint(GL_FOG_HINT, GL_NICEST)
 
 def setup_display():
-    os.environ['SDL_VIDEO_WINDOW_POS'] = "mouse"
+    os.environ['SDL_VIDEO_CENTERED'] = '1'
     pygame.init()
     
-    monitor_info = pygame.display.Info()
-    screen_width = monitor_info.current_w
-    screen_height = monitor_info.current_h
+    settings = load_settings()
+    info = pygame.display.Info()
     
-    pygame.display.set_mode((screen_width, screen_height), DOUBLEBUF | OPENGL | NOFRAME)
+    screen_width = settings["width"]
+    screen_height = settings["height"]
+    
+    if screen_width == 0 or screen_height == 0:
+        screen_width = info.current_w
+        screen_height = info.current_h - 60 
+    
+    flags = DOUBLEBUF | OPENGL | RESIZABLE
+    
+    if settings["is_fullscreen"]:
+        flags |= FULLSCREEN
+        
+    pygame.display.set_mode((screen_width, screen_height), flags)
     pygame.display.set_caption("Evidence - Resolve the Mystery")
     
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
     
-    return screen_width, screen_height
+    return screen_width, screen_height, settings
 
 def setup_camera(screen_width, screen_height):
     camera = CameraFPS(screen_width, screen_height)
@@ -399,15 +389,12 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state):
         elif event.key == pygame.K_e:
             toggle_nearest_visible_door(setting_doors, house, camera)
             
-        # [F1] OVERLAY DE FÍSICAS (Cajas y Rayos X)
         elif event.key == pygame.K_F1:
             debug_state.overlay = not debug_state.overlay
             
-        # [F2] HUD DE TEXTO (FPS y Coordenadas)
         elif event.key == pygame.K_F2:
             debug_state.hud = not debug_state.hud
             
-        # [F3] MODO WIREFRAME GLOBAL
         elif event.key == pygame.K_F3:
             debug_state.wireframe = not debug_state.wireframe
             if debug_state.wireframe:
@@ -419,6 +406,19 @@ def handle_events(menu, camera, setting_doors, house, debug_state):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
+
+        if event.type == pygame.VIDEORESIZE:
+            glViewport(0, 0, event.w, event.h)
+            
+            camera.width = event.w
+            camera.height = event.h
+            camera.configure_projection()
+            
+            menu.width = event.w
+            menu.height = event.h
+            menu.center_x = event.w // 2
+            menu.center_y = event.h // 2
+            menu.options_start_y = menu.center_y + 20
 
         if menu.state in ['MENU', 'OPTIONS']:
             menu.handle_input(event, camera)
@@ -472,16 +472,15 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         camera.process_keyboard(dt, frame_colliders)
         render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt)
-        
-        draw_crosshair(camera.width, camera.height)
-        draw_game_ui(camera.width, camera.height, game_time, target_door=get_looked_at_door(setting_doors, house, camera))
 
-        # 1. Overlay Visual (F1: Cajas y Jugador)
-        # Le pasamos el estado de F3 (debug_state.wireframe) para que no lo arruine al terminar
+        target_door = get_looked_at_door(setting_doors, house, camera)
+
+        draw_crosshair(camera.width, camera.height)
+        draw_game_ui(camera.width, camera.height, game_time, target_door)
+
         if debug_state.overlay:
             draw_debug_visuals(camera, house, setting_doors, debug_state.wireframe)
 
-        # 2. Overlay HUD (F2: Textos)
         if debug_state.hud:
             current_fps = clock.get_fps()
             state_str = "GROUNDED" if camera.is_grounded else "JUMPING/FALLING"
@@ -490,49 +489,48 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             glPushMatrix()
             glLoadIdentity()
             glOrtho(0, camera.width, camera.height, 0, -1, 1)
-            
             glMatrixMode(GL_MODELVIEW)
             glPushMatrix()
             glLoadIdentity()
+            glDisable(GL_DEPTH_TEST); glDisable(GL_LIGHTING); glDisable(GL_FOG)
             
-            glDisable(GL_DEPTH_TEST)
-            glDisable(GL_LIGHTING)
-            glDisable(GL_FOG) 
-            
-            init_debug_font()
             draw_debug_text(10, 10, f"FPS  : {current_fps:.1f}", (255, 255, 0))
             draw_debug_text(10, 30, f"XYZ  : {camera.pos_x:.2f}, {camera.pos_y:.2f}, {camera.pos_z:.2f}", (0, 255, 255))
             draw_debug_text(10, 50, f"STATE: {state_str}", (0, 255, 0) if camera.is_grounded else (255, 100, 100))
             
-            glEnable(GL_FOG)
-            glEnable(GL_DEPTH_TEST)
-            glMatrixMode(GL_PROJECTION)
-            glPopMatrix()
-            glMatrixMode(GL_MODELVIEW)
-            glPopMatrix()
+            glEnable(GL_FOG); glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix()
 
     pygame.display.flip()
 
 def main():
-    screen_width, screen_height = setup_display()
+    screen_width, screen_height, saved_settings = setup_display()
 
     menu = MainMenu(screen_width, screen_height)
+    
+    menu.is_fullscreen = saved_settings["is_fullscreen"]
+    menu.volume = saved_settings["volume"]
+    
     camera = setup_camera(screen_width, screen_height)
     skybox = setup_skybox()
     
     debug_state = DebugState()
     
-    game_time = 15 * 60  # 15 minutos en segundos
+    game_time = 15 * 60  
     
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
     glEnable(GL_DEPTH_TEST)
     setup_fog()
+    
+    pygame.event.set_blocked(None)
 
     house, config_visual, setting_doors, door_materials = load_scene_assets()
     
     render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
-
+    
+    pygame.event.set_allowed(None) 
+    pygame.event.clear() 
+    
     clock = pygame.time.Clock()
     running = True
 
@@ -548,11 +546,12 @@ def main():
             game_time -= dt
             if game_time <= 0.0:
                 game_time = 0.0
-                running = False # TODO: Pantalla de derrota por tiempo cumplido
+                running = False 
         
         if running:
             render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time)
 
+    save_settings(camera, menu)
     pygame.quit()
 
 if __name__ == '__main__':
