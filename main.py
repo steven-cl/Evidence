@@ -13,6 +13,7 @@ from load_screen import render_loading_screen
 from scene_loader import (
     load_scene_assets,
     toggle_nearest_visible_door,
+    get_looked_at_door,
     draw_static_model,
     update_doors,
     draw_doors,
@@ -20,8 +21,9 @@ from scene_loader import (
 
 def draw_crosshair(width, height):
     """
-    Dibuja una mirilla (crosshair) minimalista en el centro exacto de la pantalla.
-    Utiliza mezcla matemática de inversión para contrastar contra cualquier fondo.
+    Dibuja una mirilla (crosshair) con un contorno negro perfecto en TODOS sus bordes.
+    Utiliza coordenadas absolutas (min, max) para garantizar que las tapas interiores 
+    (las que dan al hueco) también tengan su respectivo contorno negro.
     """
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
@@ -32,46 +34,57 @@ def draw_crosshair(width, height):
     glPushMatrix()
     glLoadIdentity()
     
-    # Apagamos las físicas visuales del 3D para dibujar una UI plana
     glDisable(GL_DEPTH_TEST)
     glDisable(GL_LIGHTING)
     glDisable(GL_TEXTURE_2D)
     glDisable(GL_FOG)
     
-    # Calculamos el centro matemático de tu monitor
-    center_x = width // 2
-    center_y = height // 2
-    
-    # Parámetros estéticos de la mirilla
-    size = 8  # Longitud de cada línea de la cruz
-    gap = 4   # Espacio hueco en el centro para no tapar objetos
-    
-    # --- LA MAGIA DE LA INVERSIÓN ---
-    # Usamos blanco puro (1.0) como base matemática para la resta
-    glColor3f(1.0, 1.0, 1.0)
     glEnable(GL_BLEND)
-    # Le decimos a la GPU: "Réstale el color de los píxeles del juego a la mirilla"
-    glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     
-    glLineWidth(2.0)
-    glBegin(GL_LINES)
-    # Línea Horizontal (Segmento izquierdo y segmento derecho)
-    glVertex2f(center_x - size - gap, center_y)
-    glVertex2f(center_x - gap, center_y)
-    glVertex2f(center_x + gap, center_y)
-    glVertex2f(center_x + size + gap, center_y)
+    cx = width // 2
+    cy = height // 2
     
-    # Línea Vertical (Segmento superior y segmento inferior)
-    glVertex2f(center_x, center_y - size - gap)
-    glVertex2f(center_x, center_y - gap)
-    glVertex2f(center_x, center_y + gap)
-    glVertex2f(center_x, center_y + size + gap)
-    glEnd()
+    # --- PARÁMETROS GEOMÉTRICOS ---
+    t = 1.0  # Mitad del grosor de la línea blanca (Total = 2px)
+    s = 8.0  # Longitud del brazo blanco
+    g = 4.0  # Distancia desde el centro hasta donde empieza el brazo (Hueco)
+    o = 1.5  # Grosor del contorno negro (1.5px asegura que cubra perfecto)
     
-    # --- RESTAURACIÓN DE SEGURIDAD ---
-    # Devolvemos el motor de transparencia a su estado normal para que 
-    # los textos del F2 no se rompan ni se dibujen de colores extraños
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) 
+    # Función auxiliar ultra-precisa usando coordenadas (Izquierda, Derecha, Arriba, Abajo)
+    def draw_rect(x1, x2, y1, y2):
+        glBegin(GL_QUADS)
+        glVertex2f(x1, y1)
+        glVertex2f(x2, y1)
+        glVertex2f(x2, y2)
+        glVertex2f(x1, y2)
+        glEnd()
+    
+    # --- PASO 1: CONTORNO NEGRO (Se dibuja más grande en TODAS las direcciones) ---
+    glColor4f(0.0, 0.0, 0.0, 0.85) 
+    
+    # Brazo Izquierdo (Nota cómo 'cx - g + o' empuja la sombra hacia adentro del hueco)
+    draw_rect(cx - g - s - o, cx - g + o, cy - t - o, cy + t + o)
+    # Brazo Derecho
+    draw_rect(cx + g - o, cx + g + s + o, cy - t - o, cy + t + o)
+    # Brazo Superior
+    draw_rect(cx - t - o, cx + t + o, cy - g - s - o, cy - g + o)
+    # Brazo Inferior
+    draw_rect(cx - t - o, cx + t + o, cy + g - o, cy + g + s + o)
+    
+    # --- PASO 2: MIRA BLANCA (Se dibuja exactamente en su tamaño nominal) ---
+    glColor4f(1.0, 1.0, 1.0, 0.95)
+    
+    # Brazo Izquierdo
+    draw_rect(cx - g - s, cx - g, cy - t, cy + t)
+    # Brazo Derecho
+    draw_rect(cx + g, cx + g + s, cy - t, cy + t)
+    # Brazo Superior
+    draw_rect(cx - t, cx + t, cy - g - s, cy - g)
+    # Brazo Inferior
+    draw_rect(cx - t, cx + t, cy + g, cy + g + s)
+    
+    # --- RESTAURACIÓN ---
     glDisable(GL_BLEND)
     glEnable(GL_FOG)
     glEnable(GL_TEXTURE_2D)
@@ -92,6 +105,17 @@ class DebugState:
         self.wireframe = False # F3: Modo líneas global
 
 _debug_font = None
+
+def init_fonts():
+    global _debug_font, _ui_font
+    if _debug_font is None:
+        pygame.font.init()
+        try:
+            _debug_font = pygame.font.SysFont("Courier New", 18, bold=True)
+            _ui_font = pygame.font.SysFont("Courier New", 22, bold=True)
+        except:
+            _debug_font = pygame.font.Font(None, 24)
+            _ui_font = pygame.font.Font(None, 28)
 
 def init_debug_font():
     global _debug_font
@@ -195,6 +219,130 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
     glEnable(GL_TEXTURE_2D)
     glEnable(GL_FOG)
 # ==========================================
+
+def create_shadowed_text_texture(text, font, color):
+    """
+    Renderiza texto con una sombra negra dura (Drop Shadow) usando Pygame
+    antes de enviarlo a OpenGL, garantizando legibilidad en cualquier fondo.
+    """
+    # 1. Renderizamos ambos textos
+    main_surf = font.render(text, True, color)
+    shadow_surf = font.render(text, True, (10, 10, 10)) # Sombra casi negra
+    
+    offset = 2 # Píxeles de desplazamiento de la sombra
+    w, h = main_surf.get_size()
+    
+    # 2. Creamos una superficie transparente para combinarlos
+    combined_surf = pygame.Surface((w + offset, h + offset), pygame.SRCALPHA)
+    combined_surf.blit(shadow_surf, (offset, offset)) # Pintamos la sombra primero (fondo)
+    combined_surf.blit(main_surf, (0, 0))             # Pintamos el color encima
+    
+    # 3. Convertimos a textura OpenGL
+    text_data = pygame.image.tobytes(combined_surf, "RGBA", False)
+    cw, ch = combined_surf.get_size()
+    
+    tex_id = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, tex_id)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cw, ch, 0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
+    
+    return tex_id, cw, ch
+
+def draw_game_ui(width, height, remaining_time, target_door=None):
+    """
+    Dibuja los elementos de la interfaz del gameplay en proyección 2D.
+    Ahora utiliza Drop Shadows para contraste perfecto en cualquier iluminación.
+    """
+    init_fonts()
+    
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    glOrtho(0, width, height, 0, -1, 1)
+    
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    
+    glDisable(GL_DEPTH_TEST)
+    glDisable(GL_LIGHTING)
+    glDisable(GL_FOG)
+    
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glEnable(GL_TEXTURE_2D)
+    
+    glColor4f(1.0, 1.0, 1.0, 1.0) # Aseguramos color base puro para la textura
+    
+    # 1. INDICADOR DE PAUSA (Esquina superior izquierda)
+    pause_text = "[ESC] Pause"
+    tex_p, w_p, h_p = create_shadowed_text_texture(pause_text, _ui_font, (220, 220, 220))
+    
+    glBindTexture(GL_TEXTURE_2D, tex_p)
+    glBegin(GL_QUADS)
+    glTexCoord2f(0, 0); glVertex2f(25, 25)
+    glTexCoord2f(1, 0); glVertex2f(25 + w_p, 25)
+    glTexCoord2f(1, 1); glVertex2f(25 + w_p, 25 + h_p)
+    glTexCoord2f(0, 1); glVertex2f(25, 25 + h_p)
+    glEnd()
+    glDeleteTextures([tex_p])
+    
+    # 2. TEMPORIZADOR CRONÓMETRO (Esquina superior derecha)
+    minutes = int(remaining_time) // 60
+    seconds = int(remaining_time) % 60
+    timer_text = f"{minutes:02d}:{seconds:02d}"
+    
+    # Rojo carmesí si queda < 1 min, de lo contrario blanco grisáceo
+    timer_color = (255, 60, 60) if remaining_time < 60.0 else (240, 240, 240)
+    tex_t, w_t, h_t = create_shadowed_text_texture(timer_text, _ui_font, timer_color)
+    
+    # Alinear dinámicamente a la derecha de la resolución actual
+    x_pos_timer = width - w_t - 25
+    
+    glBindTexture(GL_TEXTURE_2D, tex_t)
+    glBegin(GL_QUADS)
+    glTexCoord2f(0, 0); glVertex2f(x_pos_timer, 25)
+    glTexCoord2f(1, 0); glVertex2f(x_pos_timer + w_t, 25)
+    glTexCoord2f(1, 1); glVertex2f(x_pos_timer + w_t, 25 + h_t)
+    glTexCoord2f(0, 1); glVertex2f(x_pos_timer, 25 + h_t)
+    glEnd()
+    glDeleteTextures([tex_t])
+    
+    # 3. INDICADOR DE INTERACCIÓN (Centro superior)
+    if target_door:
+        # Verificamos si la puerta está abierta o cerrada. 
+        # (Asumo que tu clase Door tiene una variable 'is_open', usamos getattr por seguridad)
+        is_open = getattr(target_door, 'is_open', False)
+        
+        action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
+        
+        # Color blanco puro para el texto de interacción
+        tex_i, w_i, h_i = create_shadowed_text_texture(action_text, _ui_font, (255, 255, 255))
+        
+        # Centrado horizontal, ligeramente despegado del techo (Y = 40)
+        x_pos_interact = (width - w_i) // 2
+        y_pos_interact = 40 
+        
+        glBindTexture(GL_TEXTURE_2D, tex_i)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 0); glVertex2f(x_pos_interact, y_pos_interact)
+        glTexCoord2f(1, 0); glVertex2f(x_pos_interact + w_i, y_pos_interact)
+        glTexCoord2f(1, 1); glVertex2f(x_pos_interact + w_i, y_pos_interact + h_i)
+        glTexCoord2f(0, 1); glVertex2f(x_pos_interact, y_pos_interact + h_i)
+        glEnd()
+        glDeleteTextures([tex_i])
+    
+    # Restaurar estados
+    glDisable(GL_TEXTURE_2D)
+    glDisable(GL_BLEND)
+    glEnable(GL_FOG)
+    glEnable(GL_DEPTH_TEST)
+    
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
 
 def setup_fog():
     glEnable(GL_FOG)
@@ -303,7 +451,7 @@ def render_game_world(camera, skybox, house, config_visual, setting_doors, door_
     draw_static_model(house, config_visual, door_materials)
     draw_doors(setting_doors, house, config_visual)
 
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state):
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time):
     glClearColor(0.1, 0.1, 0.15, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -326,6 +474,7 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt)
         
         draw_crosshair(camera.width, camera.height)
+        draw_game_ui(camera.width, camera.height, game_time, target_door=get_looked_at_door(setting_doors, house, camera))
 
         # 1. Overlay Visual (F1: Cajas y Jugador)
         # Le pasamos el estado de F3 (debug_state.wireframe) para que no lo arruine al terminar
@@ -373,6 +522,8 @@ def main():
     
     debug_state = DebugState()
     
+    game_time = 15 * 60  # 15 minutos en segundos
+    
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
     glEnable(GL_DEPTH_TEST)
@@ -393,8 +544,14 @@ def main():
 
         running = handle_events(menu, camera, setting_doors, house, debug_state)
         
+        if running and menu.state == 'GAME':
+            game_time -= dt
+            if game_time <= 0.0:
+                game_time = 0.0
+                running = False # TODO: Pantalla de derrota por tiempo cumplido
+        
         if running:
-            render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state)
+            render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time)
 
     pygame.quit()
 
