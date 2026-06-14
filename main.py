@@ -18,6 +18,70 @@ from scene_loader import (
     draw_doors,
 )
 
+def draw_crosshair(width, height):
+    """
+    Dibuja una mirilla (crosshair) minimalista en el centro exacto de la pantalla.
+    Utiliza mezcla matemática de inversión para contrastar contra cualquier fondo.
+    """
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    glOrtho(0, width, height, 0, -1, 1)
+    
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    
+    # Apagamos las físicas visuales del 3D para dibujar una UI plana
+    glDisable(GL_DEPTH_TEST)
+    glDisable(GL_LIGHTING)
+    glDisable(GL_TEXTURE_2D)
+    glDisable(GL_FOG)
+    
+    # Calculamos el centro matemático de tu monitor
+    center_x = width // 2
+    center_y = height // 2
+    
+    # Parámetros estéticos de la mirilla
+    size = 8  # Longitud de cada línea de la cruz
+    gap = 4   # Espacio hueco en el centro para no tapar objetos
+    
+    # --- LA MAGIA DE LA INVERSIÓN ---
+    # Usamos blanco puro (1.0) como base matemática para la resta
+    glColor3f(1.0, 1.0, 1.0)
+    glEnable(GL_BLEND)
+    # Le decimos a la GPU: "Réstale el color de los píxeles del juego a la mirilla"
+    glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO)
+    
+    glLineWidth(2.0)
+    glBegin(GL_LINES)
+    # Línea Horizontal (Segmento izquierdo y segmento derecho)
+    glVertex2f(center_x - size - gap, center_y)
+    glVertex2f(center_x - gap, center_y)
+    glVertex2f(center_x + gap, center_y)
+    glVertex2f(center_x + size + gap, center_y)
+    
+    # Línea Vertical (Segmento superior y segmento inferior)
+    glVertex2f(center_x, center_y - size - gap)
+    glVertex2f(center_x, center_y - gap)
+    glVertex2f(center_x, center_y + gap)
+    glVertex2f(center_x, center_y + size + gap)
+    glEnd()
+    
+    # --- RESTAURACIÓN DE SEGURIDAD ---
+    # Devolvemos el motor de transparencia a su estado normal para que 
+    # los textos del F2 no se rompan ni se dibujen de colores extraños
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) 
+    glDisable(GL_BLEND)
+    glEnable(GL_FOG)
+    glEnable(GL_TEXTURE_2D)
+    glEnable(GL_DEPTH_TEST)
+    
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+
 # ==========================================
 # --- SISTEMA DE DEBUG TÁCTICO (F1, F2, F3) ---
 # ==========================================
@@ -180,12 +244,12 @@ def setup_skybox():
     }
     return Skybox(skybox_paths)
 
-def process_game_event(event, menu, camera, setting_doors, debug_state):
+def process_game_event(event, menu, camera, setting_doors, house, debug_state):
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
             menu.state = 'MENU'
         elif event.key == pygame.K_e:
-            toggle_nearest_visible_door(setting_doors, camera)
+            toggle_nearest_visible_door(setting_doors, house, camera)
             
         # [F1] OVERLAY DE FÍSICAS (Cajas y Rayos X)
         elif event.key == pygame.K_F1:
@@ -203,7 +267,7 @@ def process_game_event(event, menu, camera, setting_doors, debug_state):
             else:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-def handle_events(menu, camera, setting_doors, debug_state):
+def handle_events(menu, camera, setting_doors, house, debug_state):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
@@ -213,7 +277,7 @@ def handle_events(menu, camera, setting_doors, debug_state):
             if menu.state == 'QUIT':
                 return False
         elif menu.state == 'GAME':
-            process_game_event(event, menu, camera, setting_doors, debug_state)
+            process_game_event(event, menu, camera, setting_doors, house, debug_state)
 
     return True
 
@@ -260,6 +324,8 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         camera.process_keyboard(dt, frame_colliders)
         render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt)
+        
+        draw_crosshair(camera.width, camera.height)
 
         # 1. Overlay Visual (F1: Cajas y Jugador)
         # Le pasamos el estado de F3 (debug_state.wireframe) para que no lo arruine al terminar
@@ -325,7 +391,7 @@ def main():
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05)
 
-        running = handle_events(menu, camera, setting_doors, debug_state)
+        running = handle_events(menu, camera, setting_doors, house, debug_state)
         
         if running:
             render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state)

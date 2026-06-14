@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from obj_loader import Model3D
 from pared import Texture
 from door_In import Door
+import glm
 
 
 def create_visual_config():
@@ -154,21 +155,6 @@ def load_scene_assets():
     return house, config_visual, setting_doors, door_materials
 
 
-def toggle_nearest_visible_door(setting_doors, camera, max_distance=2.0):
-    closest_door = None
-    min_dist = max_distance
-
-    for door in setting_doors:
-        if door.doorAction(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
-            dist = door.get_distance(camera.pos_x, camera.pos_z)
-            if dist < min_dist:
-                min_dist = dist
-                closest_door = door
-
-    if closest_door:
-        closest_door.toggle()
-
-
 def apply_material(material_name, config_visual):
     if material_name in config_visual:
         assigned = config_visual[material_name]
@@ -210,3 +196,71 @@ def update_doors(setting_doors, dt):
 def draw_doors(setting_doors, house, config_visual):
     for door in setting_doors:
         door.draw(house, config_visual)
+
+
+def ray_intersects_triangle(ray_origin, ray_vector, tri):
+    """
+    Algoritmo de intersección Möller-Trumbore.
+    Dispara un láser y devuelve si golpeó el triángulo y a qué distancia.
+    """
+    EPSILON = 0.0000001
+    edge1 = tri.b - tri.a
+    edge2 = tri.c - tri.a
+    h = glm.cross(ray_vector, edge2)
+    a = glm.dot(edge1, h)
+    
+    # Si el rayo es paralelo al triángulo, no hay intersección
+    if -EPSILON < a < EPSILON:
+        return False, 0.0 
+        
+    f = 1.0 / a
+    s = ray_origin - tri.a
+    u = f * glm.dot(s, h)
+    
+    if u < 0.0 or u > 1.0:
+        return False, 0.0
+        
+    q = glm.cross(s, edge1)
+    v = f * glm.dot(ray_vector, q)
+    
+    if v < 0.0 or u + v > 1.0:
+        return False, 0.0
+        
+    t = f * glm.dot(edge2, q)
+    if t > EPSILON:
+        return True, t # ¡Impacto confirmado!
+    return False, 0.0
+
+# [MODIFICADO] Añadimos 'house' como parámetro para acceder a la geometría real
+def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.5):
+    """
+    Lanza un rayo desde el centro del Crosshair para detectar la puerta exacta.
+    """
+    # Origen: Posición de los ojos de la cámara
+    ray_origin = glm.vec3(camera.pos_x, camera.pos_y, camera.pos_z)
+    # Dirección: Hacia dónde mira exactamente el Crosshair
+    ray_dir = glm.vec3(camera.front_x, camera.front_y, camera.front_z)
+    
+    closest_door = None
+    min_dist = max_distance
+
+    for door in setting_doors:
+        # Obtenemos los triángulos en la posición EXACTA en la que está la puerta AHORA
+        triangles = door.get_transformed_triangles(house)
+        door_hit_dist = float('inf')
+        hit_door = False
+        
+        # Disparamos el láser contra cada polígono de la puerta
+        for tri in triangles:
+            hit, t = ray_intersects_triangle(ray_origin, ray_dir, tri)
+            if hit and t < door_hit_dist:
+                door_hit_dist = t
+                hit_door = True
+                
+        # Si le dimos a la puerta, y está más cerca que el límite de 2.5 metros
+        if hit_door and door_hit_dist < min_dist:
+            min_dist = door_hit_dist
+            closest_door = door
+
+    if closest_door:
+        closest_door.toggle()
