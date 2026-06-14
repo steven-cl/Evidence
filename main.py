@@ -244,12 +244,12 @@ def setup_skybox():
     }
     return Skybox(skybox_paths)
 
-def process_game_event(event, menu, camera, setting_doors, debug_state):
+def process_game_event(event, menu, camera, setting_doors, house, debug_state):
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
             menu.state = 'MENU'
         elif event.key == pygame.K_e:
-            toggle_nearest_visible_door(setting_doors, camera)
+            toggle_nearest_visible_door(setting_doors, house, camera)
             
         # [F1] OVERLAY DE FÍSICAS (Cajas y Rayos X)
         elif event.key == pygame.K_F1:
@@ -267,7 +267,7 @@ def process_game_event(event, menu, camera, setting_doors, debug_state):
             else:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
-def handle_events(menu, camera, setting_doors, debug_state):
+def handle_events(menu, camera, setting_doors, house, debug_state):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
@@ -277,7 +277,7 @@ def handle_events(menu, camera, setting_doors, debug_state):
             if menu.state == 'QUIT':
                 return False
         elif menu.state == 'GAME':
-            process_game_event(event, menu, camera, setting_doors, debug_state)
+            process_game_event(event, menu, camera, setting_doors, house, debug_state)
 
     return True
 
@@ -391,7 +391,7 @@ def main():
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05)
 
-        running = handle_events(menu, camera, setting_doors, debug_state)
+        running = handle_events(menu, camera, setting_doors, house, debug_state)
         
         if running:
             render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state)
