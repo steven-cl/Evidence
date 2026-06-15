@@ -8,6 +8,7 @@ import glm
 
 def create_visual_config():
     return {
+        # Main texturing
         "matParedPrincipal": Texture('source/textures/texture_wall.jpg'),
         "matPared": Texture('source/textures/texture_wall.jpg'),
         "matPared2": Texture('source/textures/texture_wall.jpg'),
@@ -36,20 +37,21 @@ def create_visual_config():
         "matMarcoPuerta7": (0.45, 0.24, 0.1),
         "matPuerta7": Texture('source/textures/texture_wood.jpg'),
         "matP7": (0.05, 0.05, 0.05),
-        "matSofa": Texture('source/textures/texture_tela.jpg'),
-        "matSillon": Texture('source/textures/texture_tela.jpg'),
+        
+
+        # Living room
         "matMesaTV": Texture('source/textures/texture_muebles.jpg'),
         "matLamp": Texture('source/textures/texture_blood.jpg'),
         "matLamp2": Texture('source/textures/texture_blood.jpg'),
         "matLamp3": Texture('source/textures/texture_blood.jpg'),
         "matLamp4": Texture('source/textures/texture_blood.jpg'),
         "matLamp5": Texture('source/textures/texture_blood.jpg'),
-        "matTV": (0.05, 0.05, 0.05),
+        "matTV":   (0.05, 0.05, 0.05),
         "matJarron": (0.55, 0.27, 0.08),
-        "matBotella": (0.05, 0.05, 0.05),
-        "matBotella2": (0.05, 0.05, 0.05),
-        "matBotella3": (0.05, 0.05, 0.05),
-        "matBotella4": (0.05, 0.05, 0.05),
+        "matBotella":   (0.05, 0.05, 0.05),
+        "matBotella2":   (0.05, 0.05, 0.05),
+        "matBotella3":   (0.05, 0.05, 0.05),
+        "matBotella4":   (0.05, 0.05, 0.05),
         "matMesaSala": Texture('source/textures/texture_muebles.jpg'),
         "matLuz": (0.05, 0.05, 0.05),
         "matLuz2": (0.05, 0.05, 0.05),
@@ -59,11 +61,14 @@ def create_visual_config():
         "matLuz6": (0.05, 0.05, 0.05),
         "matLuz7": (0.05, 0.05, 0.05),
         "matLuz8": (0.05, 0.05, 0.05),
+      
+        # Decorations
         "matDeco": Texture('source/textures/texture_deco.jpg'),
         "matDeco2": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco3": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco4": Texture('source/textures/texture_Deco2.jpg'),
         "matDeco5": Texture('source/textures/texture_Deco2.jpg'),
+        # Kitchen
         "matCocina": Texture('source/textures/texture_base_kitchen.jpg'),
         "matGabinete": Texture('source/textures/texture_kitchen.jpg'),
         "matGabinete2": Texture('source/textures/texture_kitchen.jpg'),
@@ -106,21 +111,82 @@ def create_visual_config():
         "matSilla3": Texture('source/textures/texture_wood.jpg'),
         "matSilla4": Texture('source/textures/texture_wood.jpg'),
         "matHorno": Texture('source/textures/texture_horno.jpg'),
-        "matBaseCama": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama2": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama3": Texture('source/textures/texture_wood.jpg'),
-        "matBaseCama4": Texture('source/textures/texture_wood.jpg'),
-        "matColchon": Texture('source/textures/texture_tela.jpg'),
-        "matColchon2": Texture('source/textures/texture_tela.jpg'),
-        "matColchon3": Texture('source/textures/texture_tela.jpg'),
-        "matColchon4": Texture('source/textures/texture_tela.jpg'),
+        # Bedroom textures start here
+        "matBaseC": Texture('source/textures/texture_wood.jpg'),
+        "matBaseC2": Texture('source/textures/texture_wood.jpg'),
+        "matBaseC3": Texture('source/textures/texture_wood.jpg'),
+        "matBaseC4": Texture('source/textures/texture_wood.jpg'),
+        "matColchonA": Texture('source/textures/texture_tela.jpg'),
+        "matColchonB": Texture('source/textures/texture_tela.jpg'),
+        "matColchonC": Texture('source/textures/texture_tela.jpg'),
+        "matColchonD": Texture('source/textures/texture_tela.jpg'),
+        "matAlmohada": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada2": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada3": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada4": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada5": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada6": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada7": Texture('source/textures/texture_telaB.jpg'),
+        "matAlmohada8": Texture('source/textures/texture_telaB.jpg'),
+
+        "matSofaA": Texture('source/textures/texture_telaC.jpg'),
+        "matSillo": Texture('source/textures/texture_telaC.jpg'),
+        "matCojin": Texture('source/textures/texture_telaB.jpg'),
+        "matCojin2": Texture('source/textures/texture_telaB.jpg'),
+        "matCojin3": Texture('source/textures/texture_telaB.jpg'),
+        "matCojin4": Texture('source/textures/texture_telaB.jpg'),
+        "matCojin5": Texture('source/textures/texture_telaB.jpg'),
+        "matCojin6": Texture('source/textures/texture_telaB.jpg'),
+        "matCojinSillon": Texture('source/textures/texture_telaB.jpg'),
+        
+        # Clocks
         "matReloj": Texture('source/textures/texture_shining.jpg'),
         "matRelojHoras": Texture('source/textures/texture_watch.jpg'),
         "matRelojHora2": Texture('source/textures/texture_watch.jpg'),
         "matRelojHora3": Texture('source/textures/texture_watch.jpg'),
         "matRelojHora4": Texture('source/textures/texture_watch.jpg'),
+        
+        
         "matTecho": Texture('source/textures/texture_techo.jpg'),
         "matPiso": Texture('source/textures/texture_floor.jpg'),
+
+        #Basement
+        "matStairs": Texture('source/textures/texture_basement.jpg'),
+        "matPsotano": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPosaManos": Texture('source/textures/texture_metalB.jpg'),
+        "matPsotano": Texture('source/textures/texture_wall_basement.jpg'),
+        "matMarcoPuertaSot": (0.45, 0.24, 0.1),
+        "matMesaSotano": Texture('source/textures/texture_wood.jpg'),
+        "matRodapies": (0.22, 0.18, 0.14),
+        "matMachete": Texture('source/textures/texture_machete.jpg'),
+        "matMangoMachete": (0.05, 0.05, 0.05),
+        "matCadaver": Texture('source/textures/texture_sa.jpg'),
+        "matCuerpoP": (0.62, 0.52, 0.42),
+        "matCuadro": (0.45, 0.24, 0.1),
+        "matFoto": Texture('source/textures/texture_port.jpg'),
+        "matCruz": Texture('source/textures/texture_wood.jpg'),
+
+        #yard
+        "matPatio": Texture('source/textures/texture_pasto.jpg'),
+        "matGrama": (0.25, 0.45, 0.15),
+        "matLimite": Texture('source/textures/texture_metalB.jpg'),
+        "matPilar": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPilar2": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPilar3": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPilar4": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPilar5": Texture('source/textures/texture_wall_basement.jpg'),
+        "matPilar6": Texture('source/textures/texture_wall_basement.jpg'),
+        "matTechoExt": (0.45, 0.45, 0.45),
+        "matBasePilar": (0.45, 0.45, 0.45),
+        "matTubos": (0.45, 0.45, 0.45),
+        "matHueso": (0.45, 0.45, 0.45),
+        "matOrganos": (0.35, 0.02, 0.02),
+        "matDetalles": (0.35, 0.02, 0.02),
+        
+
+        "matSofa": Texture('source/textures/texture_telaB.jpg'),
+        "matSillon": Texture('source/textures/texture_telaB.jpg'),
+
     }
 
 
@@ -132,6 +198,8 @@ def create_doors():
         Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
+        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
+
     ]
 
 

@@ -19,9 +19,8 @@ from scene_loader import (
     draw_doors,
 )
 
-# ==========================================
-# --- PERSISTENCE ENGINE (SAVING) ---
-# ==========================================
+#PERSISTENCE ENGINE (SAVING)
+
 SETTINGS_FILE = "settings.json"
 
 def load_settings():
