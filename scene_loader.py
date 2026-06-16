@@ -182,6 +182,15 @@ def create_visual_config():
         "matHueso": (0.45, 0.45, 0.45),
         "matOrganos": (0.35, 0.02, 0.02),
         "matDetalles": (0.35, 0.02, 0.02),
+
+        "matNota": Texture('source/textures/texture_nota.jpg'),
+        "matNota2": Texture('source/textures/texture_notaB.jpg'),
+        "matPcaja": (0.45, 0.45, 0.45),
+        "matPanel": Texture('source/textures/texture_caja.jpg'),
+        "matN": Texture('source/textures/texture_caja.jpg'),
+        "matHelices": Texture('source/textures/texture_machete.jpg'),
+        "matVent": (0.05, 0.05, 0.05),
+        
         
 
         "matSofa": Texture('source/textures/texture_telaB.jpg'),
