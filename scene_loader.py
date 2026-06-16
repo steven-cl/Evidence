@@ -189,6 +189,7 @@ def create_visual_config():
         "matPanel": Texture('source/textures/texture_caja.jpg'),
         "matN": Texture('source/textures/texture_caja.jpg'),
         "matHelices": Texture('source/textures/texture_machete.jpg'),
+        "matManiCaja": Texture('source/textures/texture_machete.jpg'),
         "matVent": (0.05, 0.05, 0.05),
         
         
@@ -208,8 +209,25 @@ def create_doors():
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
         Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
+        Door("matManiCaja", -6.055, 1.2843, -1.0216, "matN", -6.0372, 1.284, -0.80611),
+        #Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matN", -8.7069, 1.4967, 2.3771) gotta be change, its not working properly
 
     ]
+
+#Notas
+
+#Nota 1: La casa estuvo abandonada mucho tiempo, como alguien podría vivir en condiciones tan precarias como estas, a menos que, la vida sea lo último que tenga un valor aquí.
+
+#Nota 2: DollMaker suele ver su reloj 4 veces cuando esta torturando a sus víctimas, un hombre obsesionado con el tiempo nunca vive en paz.
+
+#Nota 3: Podrías probar a ingresar los números en orden ascendente.
+
+#Nota 4: El tiempo es un asesino silencioso, quizás esta vez te ayude capturar a uno.
+
+#Nota 5: Me levanté temprano hoy, desayuné muy tranquilamente sabiendo que le di la eternidad y belleza de una muñeca a todas ellas.
+
+#Nota 6: Al principio suelen ser ruidosas, pero una vez que se dan cuenta de que les hice un favor dejan de quejarse. Supongo que es parte de compartirme su felicidad.
+
 
 
 def build_door_material_set(setting_doors):
