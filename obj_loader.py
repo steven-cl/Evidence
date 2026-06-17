@@ -218,6 +218,7 @@ class Model3D:
         glDisable(GL_TEXTURE_2D)
         glDisableClientState(GL_VERTEX_ARRAY)
 
+
     def draw_material(self, nombre_material):
         if nombre_material not in self.materiales:
             return

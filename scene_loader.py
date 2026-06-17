@@ -162,6 +162,7 @@ def create_visual_config():
         "matMangoMachete": (0.05, 0.05, 0.05),
         "matCadaver": Texture('source/textures/texture_sa.jpg'),
         "matCuerpoP": (0.62, 0.52, 0.42),
+        "matPiel": (0.62, 0.52, 0.42),
         "matCuadro": (0.45, 0.24, 0.1),
         "matFoto": Texture('source/textures/texture_port.jpg'),
         "matCruz": Texture('source/textures/texture_wood.jpg'),
@@ -179,6 +180,7 @@ def create_visual_config():
         "matTechoExt": (0.45, 0.45, 0.45),
         "matBasePilar": (0.45, 0.45, 0.45),
         "matTubos": (0.45, 0.45, 0.45),
+        "matCaja": Texture('source/textures/texture_wall_basement.jpg'),
         "matHueso": (0.45, 0.45, 0.45),
         "matOrganos": (0.35, 0.02, 0.02),
         "matDetalles": (0.35, 0.02, 0.02),
@@ -189,6 +191,8 @@ def create_visual_config():
         "matPanel": Texture('source/textures/texture_caja.jpg'),
         "matN": Texture('source/textures/texture_caja.jpg'),
         "matHelices": Texture('source/textures/texture_machete.jpg'),
+        "matLlave": (0.05, 0.05, 0.05),
+        "matPllave": Texture('source/textures/texture_machete.jpg'),
         "matManiCaja": Texture('source/textures/texture_machete.jpg'),
         "matVent": (0.05, 0.05, 0.05),
         
@@ -210,7 +214,13 @@ def create_doors():
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
         Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
         Door("matManiCaja", -6.055, 1.2843, -1.0216, "matN", -6.0372, 1.284, -0.80611),
-        #Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matN", -8.7069, 1.4967, 2.3771) gotta be change, its not working properly
+
+        Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matManivela3", -8.7069, 1.4967, 2.3771, -1.0),
+        Door("matGabinete6", -8.7252, 1.7951, 0.61547, "matManivela6", -8.7069, 1.4967, 1.2762),
+        Door("matGabinete8", -7.7657, 0.26301, 1.079, "matManivela8", -7.3133, 0.091964, 1.0919, -1.0),
+        Door("matGabinete7", -6.7669, 0.26301, 1.079, "matManivela7", -7.2203, 0.091964, 1.0919),
+        Door("matGabinete", -8.7261, 2.026, 4.0371, "matManivela2", -8.7132, 1.9285, 3.5848, -1.0),
+        
 
     ]
 
@@ -238,21 +248,48 @@ def build_door_material_set(setting_doors):
     return door_materials
 
 
+# List of the objects that we are inspectables
+#Thi shit is so important
+
+def create_inspectables():
+    from inspect_obj import InspectableObject
+    return [
+        InspectableObject("matJarron", 0.67176, 0.38023, 3.9105),
+        InspectableObject("matBotella4", 0.037556, 0.57008, 2.7768),
+    ]
+
+
+# Extract the material names of the objects for exclusion.
+def build_inspectable_material_set(setting_inspectables):
+    inspectable_materials = set()
+    for obj in setting_inspectables:
+        inspectable_materials.add(obj.mat_name)
+    return inspectable_materials
+
 def load_scene_assets():
-    # 1. Generate configs and doors FIRST
-    config_visual = create_visual_config()
+    # 1. Load static configuration
+    visual_config = create_visual_config()
     setting_doors = create_doors()
     door_materials = build_door_material_set(setting_doors)
     
-    # 2. Pass door_materials to Model3D so it knows what to separate
-    house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=door_materials)
+    # 2. Load inspectable objects configuration
+    setting_inspectables = create_inspectables()
+    inspectable_materials = build_inspectable_material_set(setting_inspectables)
     
-    return house, config_visual, setting_doors, door_materials
+    # 3. Merge all dynamic materials to tell Model3D to separate them
+    all_dynamic_materials = door_materials.copy()
+    all_dynamic_materials.update(inspectable_materials)
+    
+    # 4. Load the house
+    house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=all_dynamic_materials)
+    
+    # 5. RETURN THE EXACT 6 VALUES EXPECTED BY MAIN.PY
+    return house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials
 
 
-def apply_material(material_name, config_visual):
-    if material_name in config_visual:
-        assigned = config_visual[material_name]
+def apply_material(material_name, visual_config):
+    if material_name in visual_config:
+        assigned = visual_config[material_name]
         if isinstance(assigned, Texture):
             glEnable(GL_TEXTURE_2D)
             glColor3f(1.0, 1.0, 1.0)
@@ -267,17 +304,26 @@ def apply_material(material_name, config_visual):
         glColor3f(0.6, 0.6, 0.6)
 
 
-def draw_static_model(house, config_visual, door_materials):
+
+
+
+# NEW: Added the 4th parameter 'inspectable_materials' (defaulting to None for safety)
+def draw_static_model(house, visual_config, door_materials, inspectable_materials=None):
     glPushMatrix()
 
     for material_name in house.materiales.keys():
+        # 1. Ignore dynamic doors
         if material_name in door_materials:
+            continue
+            
+        # 2. NEW: Ignore inspectable objects so they don't stick to tables
+        if inspectable_materials and material_name in inspectable_materials:
             continue
 
         if material_name == "matTerrenoExt":
             continue
 
-        apply_material(material_name, config_visual)
+        apply_material(material_name, visual_config)
         house.draw_material(material_name)
 
     glPopMatrix()
@@ -288,9 +334,23 @@ def update_doors(setting_doors, dt):
         door.update(dt)
 
 
-def draw_doors(setting_doors, house, config_visual):
+def draw_doors(setting_doors, house, visual_config):
     for door in setting_doors:
-        door.draw(house, config_visual)
+        door.draw(house, visual_config)
+
+
+def draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config):
+    """Draws static objects in the world, ignoring the one in your hand"""
+    for obj in setting_inspectables:
+        if obj != inspected_object:
+            obj.draw_world(house, visual_config)
+
+def draw_inspected_hud(inspected_object, house, visual_config):
+    if inspected_object:
+        # we gotta clear the depth buufer so the obj doesn't go through the walls 
+        glClear(GL_DEPTH_BUFFER_BIT)
+        glLoadIdentity()
+        inspected_object.draw_hud(house, visual_config)
 
 
 def ray_intersects_triangle(ray_origin, ray_vector, tri):
@@ -322,9 +382,8 @@ def ray_intersects_triangle(ray_origin, ray_vector, tri):
     return False, 0.0
 
 def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
-    """
-    Dispara el láser constantemente para saber qué puerta estamos mirando.
-    """
+   
+   #use the ray to know what door we are looking at
     ray_origin = glm.vec3(camera.pos_x, camera.pos_y, camera.pos_z)
     ray_dir = glm.vec3(camera.front_x, camera.front_y, camera.front_z)
     
@@ -349,9 +408,7 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
     return closest_door
 
 def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.5):
-    """
-    Abre o cierra la puerta solo si la estamos mirando directamente.
-    """
+    #open or close the door
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
         target_door.toggle()

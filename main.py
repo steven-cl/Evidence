@@ -17,6 +17,8 @@ from scene_loader import (
     draw_static_model,
     update_doors,
     draw_doors,
+    draw_inspectables_world,
+    draw_inspected_hud
 )
 
 #PERSISTENCE ENGINE (SAVING)
@@ -133,7 +135,7 @@ def create_shadowed_text_texture(text, font, color):
     
     return tex_id, cw, ch
 
-def draw_game_ui(width, height, remaining_time, target_door=None):
+def draw_game_ui(width, height, remaining_time, action_text=None):
     init_fonts()
     
     glMatrixMode(GL_PROJECTION)
@@ -187,11 +189,8 @@ def draw_game_ui(width, height, remaining_time, target_door=None):
     glEnd()
     glDeleteTextures([tex_t])
 
-    # 3. INTERACTION INDICATOR (Doors)
-    if target_door:
-        is_open = getattr(target_door, 'is_open', False)
-        action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
-        
+    # 3. INTERACTION INDICATOR (Dinámico para puertas y objetos)
+    if action_text:
         tex_i, w_i, h_i = create_shadowed_text_texture(action_text, _ui_font, (255, 255, 255))
         
         x_pos_interact = (width - w_i) // 2
@@ -379,12 +378,24 @@ def setup_skybox():
     }
     return Skybox(skybox_paths)
 
-def process_game_event(event, menu, camera, setting_doors, house, debug_state):
+def process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object):
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
             menu.state = 'MENU'
         elif event.key == pygame.K_e:
-            toggle_nearest_visible_door(setting_doors, house, camera)
+            if inspected_object:
+                inspected_object.reset_rotation()
+                inspected_object = None
+            else:
+                grabbed = False
+                for obj in setting_inspectables:
+                    if obj.can_be_inspected(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
+                        inspected_object = obj
+                        grabbed = True
+                        break
+                
+                if not grabbed:
+                    toggle_nearest_visible_door(setting_doors, house, camera)
             
         elif event.key == pygame.K_F1:
             debug_state.overlay = not debug_state.overlay
@@ -398,11 +409,13 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state):
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
             else:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+                
+    return inspected_object
 
-def handle_events(menu, camera, setting_doors, house, debug_state):
+def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            return False
+            return False, inspected_object
 
         if event.type == pygame.VIDEORESIZE:
             glViewport(0, 0, event.w, event.h)
@@ -420,13 +433,13 @@ def handle_events(menu, camera, setting_doors, house, debug_state):
         if menu.state in ['MENU', 'OPTIONS']:
             menu.handle_input(event, camera)
             if menu.state == 'QUIT':
-                return False
+                return False, inspected_object
         elif menu.state == 'GAME':
-            process_game_event(event, menu, camera, setting_doors, house, debug_state)
+            inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object)
 
-    return True
+    return True, inspected_object
 
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders):
+def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, setting_inspectables, inspected_object):
     glClearColor(0.1, 0.1, 0.15, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -439,7 +452,12 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         pygame.mouse.set_visible(False)
         
         dx, dy = pygame.mouse.get_rel()
-        camera.process_mouse(dx, dy) 
+        
+        if inspected_object:
+            inspected_object.rot_y += dx * 0.5
+            inspected_object.rot_x += dy * 0.5
+        else:
+            camera.process_mouse(dx, dy) 
         
         # --- SPATIAL PARTITIONING: GRID-BASED COLLISION CULLING ---
         CELL_SIZE = 2.0 
@@ -467,7 +485,8 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             frame_colliders.extend(door.get_transformed_triangles(house))
 
         # --- EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED COLLIDERS ---
-        camera.process_keyboard(dt, frame_colliders)
+        if not inspected_object:
+            camera.process_keyboard(dt, frame_colliders)
         
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_FOG)
@@ -489,14 +508,35 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         try:
             glCallList(house_display_list)
-            draw_doors(setting_doors, house, config_visual)
+            draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config)
+            draw_doors(setting_doors, house, visual_config)
+            draw_inspected_hud(inspected_object, house, visual_config)
         except OpenGL.error.Error:
             pass # The OpenGL context is resetting; ignore this frame to prevent crashing
 
-        target_door = get_looked_at_door(setting_doors, house, camera)
+        # LÓGICA DE TEXTO DE INTERFAZ (HUD)
+        action_text = None
+        
+        if inspected_object:
+            action_text = "Press [E] to Drop"
+        else:
+            looked_obj = None
+            for obj in setting_inspectables:
+                if obj.can_be_inspected(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
+                    looked_obj = obj
+                    break
+            
+            if looked_obj:
+                nombre = getattr(looked_obj, 'name', 'Object')
+                action_text = f"Press [E] to Inspect {nombre}"
+            else:
+                target_door = get_looked_at_door(setting_doors, house, camera)
+                if target_door:
+                    is_open = getattr(target_door, 'is_open', False)
+                    action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
 
         draw_crosshair(camera.width, camera.height)
-        draw_game_ui(camera.width, camera.height, game_time, target_door)
+        draw_game_ui(camera.width, camera.height, game_time, action_text)
 
         if debug_state.overlay:
             draw_debug_visuals(camera, house, setting_doors, debug_state.wireframe)
@@ -544,18 +584,18 @@ def main():
     
     pygame.event.set_blocked(None)
 
-    house, config_visual, setting_doors, door_materials = load_scene_assets()
+    house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials = load_scene_assets()
     
     static_colliders = list(house.colliders)
     
-    # ==============================================================
+   
     # --- RENDER OPTIMIZATION: OPENGL DISPLAY LISTS ---
     # Compile the static geometry of the house directly into VRAM to drastically reduce draw calls
     house_display_list = glGenLists(1)
     glNewList(house_display_list, GL_COMPILE)
-    draw_static_model(house, config_visual, door_materials)
+    draw_static_model(house, visual_config, door_materials, inspectable_materials)
     glEndList()
-    # ==============================================================
+   
     
     render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
     
@@ -566,13 +606,15 @@ def main():
     running = True
 
     glClearColor(0.1, 0.1, 0.15, 1.0)
+    
+    inspected_object = None
 
     while running:
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05)
 
         pygame.event.pump()
-        running = handle_events(menu, camera, setting_doors, house, debug_state)
+        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object)
         
         if running and menu.state == 'GAME':
             game_time -= dt
@@ -581,7 +623,7 @@ def main():
                 running = False 
         
         if running:
-            render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders)
+            render_frame(menu, camera, skybox, house, visual_config, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, setting_inspectables, inspected_object)
 
     save_settings(camera, menu)
     pygame.quit()
