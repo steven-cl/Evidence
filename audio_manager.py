@@ -19,8 +19,8 @@ class AudioManager:
             os.makedirs(os.path.join(self.sounds_dir, "music"), exist_ok=True)
 
         try:
-            # OPTIMIZATION: Small buffer size (256) to minimize playback latency triggers
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=256)
+            # OPTIMIZATION: Small buffer size (128) to minimize playback latency triggers
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=128)
             print("[Audio System]: WASAPI hardware endpoint initialized successfully.")
         except pygame.error as e:
             print(f"[Audio Warning]: Sound card endpoint allocation failed ({e}). Running in SILENT mode.")
