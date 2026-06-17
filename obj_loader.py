@@ -103,9 +103,15 @@ class Model3D:
 
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
             # Excluded kitchen and cabinet collisions to prevent hallway blockage
-            FURNITURE_KEYWORDS = ["lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno"]
+            FURNITURE_KEYWORDS = [
+                "lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno",
+                "matbasec", "matcolchon", "matalmohada", "matsillo", "matcojin", 
+                "matlimite", "mathueso", "matorganos", "matdetalles", "matmachete", 
+                "matmangomachete", "matcadaver", "matcuerpop", "matcruz"
+            ]
+            nombre_min = name.lower()
             
-            if any(kw in name.lower() for kw in FURNITURE_KEYWORDS):
+            if any(kw in nombre_min for kw in FURNITURE_KEYWORDS):
                 b_min_x, b_max_x = float('inf'), float('-inf')
                 b_min_y, b_max_y = float('inf'), float('-inf')
                 b_min_z, b_max_z = float('inf'), float('-inf')
@@ -122,11 +128,14 @@ class Model3D:
                     if z > b_max_z: b_max_z = z
                 
                 # Bounding box expansion and reduction margins
-                if "lamp" in name.lower():
+                muebles_expandir = ["lamp", "sillon", "sofa", "cama", "matcolchon", "matalmohada", "matsillo", "matcojin"]
+                muebles_reducir = ["mesa", "comedor", "silla"]
+
+                if any(kw in nombre_min for kw in muebles_expandir):
                     padding = 0.12 
                     b_min_x -= padding; b_max_x += padding
                     b_min_z -= padding; b_max_z += padding
-                elif any(kw in name.lower() for kw in ["mesa", "comedor", "silla"]):
+                elif any(kw in nombre_min for kw in muebles_reducir):
                     inset = 0.08 # Reduced by 8cm to widen the kitchen hallway clearance
                     b_min_x += inset; b_max_x -= inset
                     b_min_z += inset; b_max_z -= inset
@@ -159,19 +168,31 @@ class Model3D:
                     self._add_to_grid(tri)
                 continue 
 
-            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", "perilla", "deco", "luz", "jarron", "techo"])
+            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", 
+                                                                "perilla", "deco", "luz", "jarron", "techo", "rodapies",
+                                                                "grama"])
             if is_ignored_prop:
                 continue 
 
-            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco"]
+            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stairs", "pilar"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
+
+            INVERTIR_NORMALES = ["matpsotano", "matpilar", "psotano", "pilar"]
+            DOBLE_CARA = ["matstairs", "stairs"]
 
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])
                 v2 = (v[i + stride * 2 - 3], v[i + stride * 2 - 2], v[i + stride * 2 - 1])
                 v3 = (v[i + stride * 3 - 3], v[i + stride * 3 - 2], v[i + stride * 3 - 1])
                 
-                tri = Triangle(v1, v2, v3)
+                if any(kw in nombre_min for kw in INVERTIR_NORMALES):
+                    v_temp = v2
+                    v2 = v3
+                    v3 = v_temp
+                
+                es_doble_cara = True if any(kw in nombre_min for kw in DOBLE_CARA) else True
+                
+                tri = Triangle(v1, v2, v3, is_double_sided=es_doble_cara)
                 
                 if name in door_materials:
                     if name not in self.door_source_triangles:
@@ -188,20 +209,25 @@ class Model3D:
         print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
 
     def _add_to_grid(self, tri):
-        # Define the cell size for spatial partitioning (e.g., 2.0 units)
+        # Define spatial partitioning cell size
         cell_size = 2.0
-        # Calculate which spatial grid cells the triangle overlaps
+        
+        # Calculate overlapping spatial grid cells across X, Y, and Z axes
         min_x = int(min(tri.a.x, tri.b.x, tri.c.x) // cell_size)
         max_x = int(max(tri.a.x, tri.b.x, tri.c.x) // cell_size)
+        min_y = int(min(tri.a.y, tri.b.y, tri.c.y) // cell_size)
+        max_y = int(max(tri.a.y, tri.b.y, tri.c.y) // cell_size)
         min_z = int(min(tri.a.z, tri.b.z, tri.c.z) // cell_size)
         max_z = int(max(tri.a.z, tri.b.z, tri.c.z) // cell_size)
 
+        # Populate 3D spatial grid mapping
         for x in range(min_x, max_x + 1):
-            for z in range(min_z, max_z + 1):
-                key = (x, z)
-                if key not in self.grid:
-                    self.grid[key] = []
-                self.grid[key].append(tri)
+            for y in range(min_y, max_y + 1):
+                for z in range(min_z, max_z + 1):
+                    key = (x, y, z)
+                    if key not in self.grid:
+                        self.grid[key] = []
+                    self.grid[key].append(tri)
 
     def draw(self):
         glEnableClientState(GL_VERTEX_ARRAY)

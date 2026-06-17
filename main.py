@@ -459,23 +459,25 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
         else:
             camera.process_mouse(dx, dy) 
         
-        # --- SPATIAL PARTITIONING: GRID-BASED COLLISION CULLING ---
+        # --- SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING ---
         CELL_SIZE = 2.0 
 
-        # 1. Identify the grid cell currently occupied by the player
+        # 1. Identify the 3D grid cell currently occupied by the player
         cell_x = int(camera.pos_x // CELL_SIZE)
+        cell_y = int(camera.pos_y // CELL_SIZE)
         cell_z = int(camera.pos_z // CELL_SIZE)
 
         # 2. Use a set to collect nearby triangles to prevent duplicates and optimize lookup performance
         nearby_triangles = set()
 
-        # 3. Query the current cell and the 8 surrounding cells (9 cells total)
+        # 3. Query the current cell and the 26 surrounding 3D cells (27 cells total, 3x3x3 block)
         for x in range(cell_x - 1, cell_x + 2):
-            for z in range(cell_z - 1, cell_z + 2):
-                cell_key = (x, z)
-                if cell_key in house.grid:
-                    # house.grid returns a list of triangles within the queried cell
-                    nearby_triangles.update(house.grid[cell_key])
+            for y in range(cell_y - 1, cell_y + 1):
+                for z in range(cell_z - 1, cell_z + 2):
+                    cell_key = (x, y, z)
+                    if cell_key in house.grid:
+                        # house.grid returns a list of triangles within the queried 3D voxel
+                        nearby_triangles.update(house.grid[cell_key])
 
         # 4. Convert the set of nearby colliders into a list for processing
         frame_colliders = list(nearby_triangles)

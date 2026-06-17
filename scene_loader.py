@@ -154,7 +154,6 @@ def create_visual_config():
         "matStairs": Texture('source/textures/texture_basement.jpg'),
         "matPsotano": Texture('source/textures/texture_wall_basement.jpg'),
         "matPosaManos": Texture('source/textures/texture_metalB.jpg'),
-        "matPsotano": Texture('source/textures/texture_wall_basement.jpg'),
         "matMarcoPuertaSot": (0.45, 0.24, 0.1),
         "matMesaSotano": Texture('source/textures/texture_wood.jpg'),
         "matRodapies": (0.22, 0.18, 0.14),
