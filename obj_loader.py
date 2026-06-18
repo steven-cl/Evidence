@@ -104,7 +104,7 @@ class Model3D:
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
             FURNITURE_KEYWORDS = [
                 "lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno",
-                "basec", "colchon", "almohada", "sillo", "cojin", "piel",
+                "basec", "colchon", "almohada", "sillo", "cojin",
                 "limite", "hueso", "organos", "detalles", "machete",
                 "mangomachete", "cadaver", "cuerpop", "cruz", "head", "hands", "hair"
             ]
@@ -174,7 +174,7 @@ class Model3D:
 
             is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador",
                                                                 "perilla", "deco", "luz", "jarron", "techo", "rodapies",
-                                                                "grama"])
+                                                                "grama", "pie"])
             if is_ignored_prop:
                 continue
 
