@@ -30,15 +30,17 @@ class Triangle:
         self.b = glm.vec3(v2)
         self.c = glm.vec3(v3)
         self.is_double_sided = is_double_sided
-        self.is_climbable = False # Property to allow jumping over objects
+        self.is_climbable = False 
         
+        # Normal calculation via cross product
         cross_prod = glm.cross(self.b - self.a, self.c - self.a)
         if glm.length(cross_prod) > 0.0001:
             self.normal = glm.normalize(cross_prod)
         else:
             self.normal = glm.vec3(0.0, 1.0, 0.0)
-        
-        margin = 1.0 
+            
+        # Bounding box bounds for spatial grid
+        margin = 1.0
         self.min_x = min(self.a.x, self.b.x, self.c.x) - margin
         self.max_x = max(self.a.x, self.b.x, self.c.x) + margin
         self.min_y = min(self.a.y, self.b.y, self.c.y) - margin
@@ -50,23 +52,21 @@ class Model3D:
     def __init__(self, file_route, scale=1.0, texture_filename=None, door_materials=None):
         print(f"Loading model from: {file_route}...")
         self.scene = pywavefront.Wavefront(file_route, collect_faces=True)
-        
         self.materiales = {}
-        self.colliders = [] 
-        self.door_source_triangles = {} 
+        self.colliders = []
+        self.door_source_triangles = {}
         self.grid = {}
-        
-        self.grid_size = 3.0  
-        self.spatial_grid = {} 
+        self.grid_size = 3.0
+        self.spatial_grid = {}
         
         if door_materials is None:
             door_materials = set()
-        
+            
         self.global_texture_id = None
         if texture_filename:
             tex_path = os.path.join("source", "textures", texture_filename)
             self.global_texture_id = load_texture(tex_path)
-        
+            
         for name, material in self.scene.materials.items():
             if not material.vertices:
                 continue
@@ -76,21 +76,21 @@ class Model3D:
 
             if scale != 1.0:
                 for i in range(0, len(v), stride):
-                    v[i + stride - 3] *= scale  
-                    v[i + stride - 2] *= scale  
-                    v[i + stride - 1] *= scale  
+                    v[i + stride - 3] *= scale
+                    v[i + stride - 2] *= scale
+                    v[i + stride - 1] *= scale
 
             vertex_data = (ctypes.c_float * len(v))(*v)
             num_vertices = len(v) // stride
-            
             gl_format = GL_V3F
+            
             if material.vertex_format == 'N3F_V3F':
                 gl_format = GL_N3F_V3F
             elif material.vertex_format == 'T2F_V3F':
                 gl_format = GL_T2F_V3F
             elif material.vertex_format == 'T2F_N3F_V3F':
                 gl_format = GL_T2F_N3F_V3F
-            
+                
             mesh_info = {
                 'vertex_data': vertex_data,
                 'num_vertices': num_vertices,
@@ -102,12 +102,11 @@ class Model3D:
             self.materiales[name].append(mesh_info)
 
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
-            # Excluded kitchen and cabinet collisions to prevent hallway blockage
             FURNITURE_KEYWORDS = [
                 "lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno",
-                "matbasec", "matcolchon", "matalmohada", "matsillo", "matcojin", 
-                "matlimite", "mathueso", "matorganos", "matdetalles", "matmachete", 
-                "matmangomachete", "matcadaver", "matcuerpop", "matcruz"
+                "basec", "colchon", "almohada", "sillo", "cojin", "piel",
+                "limite", "hueso", "organos", "detalles", "machete",
+                "mangomachete", "cadaver", "cuerpop", "cruz", "head", "hands", "hair"
             ]
             nombre_min = name.lower()
             
@@ -126,20 +125,20 @@ class Model3D:
                     if y > b_max_y: b_max_y = y
                     if z < b_min_z: b_min_z = z
                     if z > b_max_z: b_max_z = z
-                
+                    
                 # Bounding box expansion and reduction margins
                 muebles_expandir = ["lamp", "sillon", "sofa", "cama", "matcolchon", "matalmohada", "matsillo", "matcojin"]
                 muebles_reducir = ["mesa", "comedor", "silla"]
 
                 if any(kw in nombre_min for kw in muebles_expandir):
-                    padding = 0.12 
+                    padding = 0.12
                     b_min_x -= padding; b_max_x += padding
                     b_min_z -= padding; b_max_z += padding
                 elif any(kw in nombre_min for kw in muebles_reducir):
-                    inset = 0.08 # Reduced by 8cm to widen the kitchen hallway clearance
+                    inset = 0.08
                     b_min_x += inset; b_max_x -= inset
                     b_min_z += inset; b_max_z -= inset
-                
+                    
                 c000 = (b_min_x, b_min_y, b_min_z)
                 c100 = (b_max_x, b_min_y, b_min_z)
                 c010 = (b_min_x, b_max_y, b_min_z)
@@ -149,36 +148,41 @@ class Model3D:
                 c011 = (b_min_x, b_max_y, b_max_z)
                 c111 = (b_max_x, b_max_y, b_max_z)
                 
+                is_double_faced = any(kw in nombre_min for kw in ["head", "hands", "hair"])
+                
+                def create_box_triangle(v1, v2, v3):
+                    return Triangle(v1, v2, v3, is_double_sided=is_double_faced)
+
                 box_triangles = [
-                    Triangle(c001, c101, c011, is_double_sided=False), Triangle(c111, c011, c101, is_double_sided=False), 
-                    Triangle(c100, c000, c110, is_double_sided=False), Triangle(c010, c110, c000, is_double_sided=False), 
-                    Triangle(c000, c001, c010, is_double_sided=False), Triangle(c011, c010, c001, is_double_sided=False), 
-                    Triangle(c101, c100, c111, is_double_sided=False), Triangle(c110, c111, c100, is_double_sided=False), 
-                    Triangle(c010, c011, c110, is_double_sided=False), Triangle(c111, c110, c011, is_double_sided=False), 
-                    Triangle(c000, c100, c001, is_double_sided=False), Triangle(c101, c001, c100, is_double_sided=False)  
+                    create_box_triangle(c001, c101, c011), create_box_triangle(c111, c011, c101),
+                    create_box_triangle(c100, c000, c110), create_box_triangle(c010, c110, c000),
+                    create_box_triangle(c000, c001, c010), create_box_triangle(c011, c010, c001),
+                    create_box_triangle(c101, c100, c111), create_box_triangle(c110, c111, c100),
+                    create_box_triangle(c010, c011, c110), create_box_triangle(c111, c110, c011),
+                    create_box_triangle(c000, c100, c001), create_box_triangle(c101, c001, c100)
                 ]
                 
                 # Enable jumping capabilities over the living room table
                 if "mesasala" in name.lower():
                     for tri in box_triangles:
                         tri.is_climbable = True
-                
+                        
                 for tri in box_triangles:
                     self.colliders.append(tri)
                     self._add_to_grid(tri)
-                continue 
+                continue
 
-            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador", 
+            is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador",
                                                                 "perilla", "deco", "luz", "jarron", "techo", "rodapies",
                                                                 "grama"])
             if is_ignored_prop:
-                continue 
+                continue
 
             STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stairs", "pilar"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
 
             INVERTIR_NORMALES = ["matpsotano", "matpilar", "psotano", "pilar"]
-            DOBLE_CARA = ["matstairs", "stairs"]
+            DOBLE_CARA = ["stairs"]
 
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])
@@ -189,9 +193,8 @@ class Model3D:
                     v_temp = v2
                     v2 = v3
                     v3 = v_temp
-                
+                    
                 es_doble_cara = True if any(kw in nombre_min for kw in DOBLE_CARA) else True
-                
                 tri = Triangle(v1, v2, v3, is_double_sided=es_doble_cara)
                 
                 if name in door_materials:
@@ -201,11 +204,10 @@ class Model3D:
                 else:
                     self.colliders.append(tri)
                     self._add_to_grid(tri)
-                
-                # Prevent OS application unresponsiveness warnings by pumping the event queue during heavy vertex processing
+                    
                 if i % 500 == 0:
                     pygame.event.pump()
-            
+                    
         print(f"Model loaded! Active optimized physics triangles: {len(self.colliders)}")
 
     def _add_to_grid(self, tri):
@@ -240,7 +242,6 @@ class Model3D:
             for mesh in lista_meshes:
                 glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
                 glDrawArrays(GL_TRIANGLES, 0, mesh['num_vertices'])
-            
         glDisable(GL_TEXTURE_2D)
         glDisableClientState(GL_VERTEX_ARRAY)
 
@@ -248,7 +249,7 @@ class Model3D:
     def draw_material(self, nombre_material):
         if nombre_material not in self.materiales:
             return
-        
+            
         if glGetError() == GL_INVALID_OPERATION:
             return
             
@@ -257,7 +258,7 @@ class Model3D:
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self.global_texture_id)
             glColor3f(1.0, 1.0, 1.0)
-        
+            
         try:
             for mesh in self.materiales[nombre_material]:
                 glInterleavedArrays(mesh['gl_format'], 0, mesh['vertex_data'])
