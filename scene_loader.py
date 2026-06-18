@@ -47,11 +47,11 @@ def create_visual_config():
         "matLamp4": Texture('source/textures/texture_blood.jpg'),
         "matLamp5": Texture('source/textures/texture_blood.jpg'),
         "matTV":   (0.05, 0.05, 0.05),
-        "matJarron": (0.55, 0.27, 0.08),
+        "matJarron": Texture('source/textures/texture_jar.jpg'),
         "matBotella":   (0.05, 0.05, 0.05),
         "matBotella2":   (0.05, 0.05, 0.05),
         "matBotella3":   (0.05, 0.05, 0.05),
-        "matBotella4":   (0.05, 0.05, 0.05),
+        "matBotella4": Texture('source/textures/texture_glass.jpg'),
         "matMesaSala": Texture('source/textures/texture_muebles.jpg'),
         "matLuz": (0.05, 0.05, 0.05),
         "matLuz2": (0.05, 0.05, 0.05),
@@ -160,8 +160,14 @@ def create_visual_config():
         "matMachete": Texture('source/textures/texture_machete.jpg'),
         "matMangoMachete": (0.05, 0.05, 0.05),
         "matCadaver": Texture('source/textures/texture_sa.jpg'),
+        "matCadaverB": Texture('source/textures/texture_sa.jpg'),
+        "matCadaverC": Texture('source/textures/texture_sa.jpg'),
+        "matCadaverD": Texture('source/textures/texture_sa.jpg'),
         "matCuerpoP": (0.62, 0.52, 0.42),
-        "matPiel": (0.62, 0.52, 0.42),
+        "matPie1": (0.62, 0.52, 0.42),
+        "matPie2": (0.62, 0.52, 0.42),
+        "matPie3": (0.62, 0.52, 0.42),
+        "matPie4": (0.62, 0.52, 0.42),
         "matCuadro": (0.45, 0.24, 0.1),
         "matFoto": Texture('source/textures/texture_port.jpg'),
         "matCruz": Texture('source/textures/texture_wood.jpg'),
@@ -176,6 +182,7 @@ def create_visual_config():
         "matPilar4": Texture('source/textures/texture_wall_basement.jpg'),
         "matPilar5": Texture('source/textures/texture_wall_basement.jpg'),
         "matPilar6": Texture('source/textures/texture_wall_basement.jpg'),
+        "matStairs2": (0.45, 0.45, 0.45),
         "matTechoExt": (0.45, 0.45, 0.45),
         "matBasePilar": (0.45, 0.45, 0.45),
         "matTubos": (0.45, 0.45, 0.45),
@@ -185,6 +192,11 @@ def create_visual_config():
         "matDetalles": (0.35, 0.02, 0.02),
 
         "matNota": Texture('source/textures/texture_nota.jpg'),
+        "matNotaB": Texture('source/textures/texture_nota.jpg'),
+        "matNotaC": Texture('source/textures/texture_nota.jpg'),
+        "matNotaD": Texture('source/textures/texture_nota.jpg'),
+        "matNotaE": Texture('source/textures/texture_nota.jpg'),
+        "matNotaF": Texture('source/textures/texture_nota.jpg'),
         "matNota2": Texture('source/textures/texture_notaB.jpg'),
         "matPcaja": (0.45, 0.45, 0.45),
         "matPanel": Texture('source/textures/texture_caja.jpg'),
@@ -250,20 +262,37 @@ def build_door_material_set(setting_doors):
 # List of the objects that we are inspectables
 #Thi shit is so important
 
+# NEW: Extract the material names of the objects for exclusion.
+def build_inspectable_material_set(setting_inspectables):
+    inspectable_materials = set()
+    for obj in setting_inspectables:
+        # Loop through the list of materials inside each object
+        for mat in obj.mat_names:
+            inspectable_materials.add(mat)
+    return inspectable_materials
+
+# NEW: Generate the list of interactive objects that can be inspected.
 def create_inspectables():
     from inspect_obj import InspectableObject
     return [
         InspectableObject("matJarron", 0.67176, 0.38023, 3.9105),
         InspectableObject("matBotella4", 0.037556, 0.57008, 2.7768),
+        InspectableObject("matNota", -0.16774, 0.47904, 2.8266),
+        InspectableObject("matNotaB", -1.2706, 0.45003, -0.99463),
+        InspectableObject("matNotaC", -5.9904, 0.10123, 0.12632),
+        InspectableObject("matNotaD", -9.232, 0.69037, 1.4855),
+        InspectableObject("matNotaE", -9.0343, 1.7336, 2.4406),
+        InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
+        InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
+        
+        
+        
+        # Aquí instancias tu machete pasándole una LISTA con los nombres de sus materiales en Blender
+        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="")
     ]
 
+        
 
-# Extract the material names of the objects for exclusion.
-def build_inspectable_material_set(setting_inspectables):
-    inspectable_materials = set()
-    for obj in setting_inspectables:
-        inspectable_materials.add(obj.mat_name)
-    return inspectable_materials
 
 def load_scene_assets():
     # 1. Load static configuration
@@ -306,7 +335,7 @@ def apply_material(material_name, visual_config):
 
 
 
-# NEW: Added the 4th parameter 'inspectable_materials' (defaulting to None for safety)
+#Added the 4th parameter 'inspectable_materials'
 def draw_static_model(house, visual_config, door_materials, inspectable_materials=None):
     glPushMatrix()
 
@@ -338,11 +367,14 @@ def draw_doors(setting_doors, house, visual_config):
         door.draw(house, visual_config)
 
 
-def draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config):
-    """Draws static objects in the world, ignoring the one in your hand"""
+# NUEVO: Añadido el parámetro looked_obj
+def draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config, looked_obj=None):
+    """Dibuja los objetos estáticos en el mundo, ignorando el que tienes en la mano"""
     for obj in setting_inspectables:
         if obj != inspected_object:
-            obj.draw_world(house, visual_config)
+            # Calculate if we are looking the object
+            is_highlighted = (obj == looked_obj)
+            obj.draw_world(house, visual_config, is_highlighted)
 
 def draw_inspected_hud(inspected_object, house, visual_config):
     if inspected_object:

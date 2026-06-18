@@ -54,7 +54,7 @@ def save_settings(camera, menu):
             json.dump(settings, f)
     except Exception as e:
         print(f"Error saving settings: {e}")
-# ==========================================
+
 
 class DebugState:
     def __init__(self):
@@ -189,7 +189,7 @@ def draw_game_ui(width, height, remaining_time, action_text=None):
     glEnd()
     glDeleteTextures([tex_t])
 
-    # 3. INTERACTION INDICATOR (Dinámico para puertas y objetos)
+    # 3. INTERACTION INDICATOR
     if action_text:
         tex_i, w_i, h_i = create_shadowed_text_texture(action_text, _ui_font, (255, 255, 255))
         
@@ -389,7 +389,7 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
             else:
                 grabbed = False
                 for obj in setting_inspectables:
-                    if obj.can_be_inspected(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
+                    if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
                         inspected_object = obj
                         grabbed = True
                         break
@@ -459,7 +459,7 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
         else:
             camera.process_mouse(dx, dy) 
         
-        # --- SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING ---
+        #SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING
         CELL_SIZE = 2.0 
 
         # 1. Identify the 3D grid cell currently occupied by the player
@@ -486,7 +486,7 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
         for door in setting_doors:
             frame_colliders.extend(door.get_transformed_triangles(house))
 
-        # --- EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED COLLIDERS ---
+        #EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED COLLIDERS
         if not inspected_object:
             camera.process_keyboard(dt, frame_colliders)
         
@@ -507,24 +507,18 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
 
         camera.update_view()
         update_doors(setting_doors, dt)
-        
-        try:
-            glCallList(house_display_list)
-            draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config)
-            draw_doors(setting_doors, house, visual_config)
-            draw_inspected_hud(inspected_object, house, visual_config)
-        except OpenGL.error.Error:
-            pass # The OpenGL context is resetting; ignore this frame to prevent crashing
 
-        # LÓGICA DE TEXTO DE INTERFAZ (HUD)
+       
+        # 1. Calculate what we are looking at
+       
         action_text = None
+        looked_obj = None
         
         if inspected_object:
             action_text = "Press [E] to Drop"
         else:
-            looked_obj = None
             for obj in setting_inspectables:
-                if obj.can_be_inspected(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
+                if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
                     looked_obj = obj
                     break
             
@@ -536,6 +530,18 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
                 if target_door:
                     is_open = getattr(target_door, 'is_open', False)
                     action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
+
+        
+        # 2. 3D RENDERING
+       
+        try:
+            glCallList(house_display_list)
+            # Pass 'looked_obj' to the drawing function to trigger the glowing outline
+            draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config, looked_obj)
+            draw_doors(setting_doors, house, visual_config)
+            draw_inspected_hud(inspected_object, house, visual_config)
+        except OpenGL.error.Error:
+            pass # The OpenGL context is resetting; ignore this frame to prevent crashing
 
         draw_crosshair(camera.width, camera.height)
         draw_game_ui(camera.width, camera.height, game_time, action_text)
