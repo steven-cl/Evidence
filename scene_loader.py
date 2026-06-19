@@ -216,10 +216,6 @@ def create_visual_config():
 
 
 def create_doors():
-    """
-    Initializes scene doors and sets explicit lock flags for the safe object.
-    Applies setattr() to inject dynamic attributes without triggering strict Pyright type-checker errors.
-    """
     doors = [
         Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
         Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
@@ -241,6 +237,11 @@ def create_doors():
         setattr(door, 'is_safe', is_safe_door)
         setattr(door, 'is_locked', is_safe_door)
         
+        # Require key to open Door #7
+        if door.mat == "matPuerta6":
+            setattr(door, 'requires_key', True)
+            setattr(door, 'is_locked', True)
+            
     return doors
 
 #Notas
@@ -292,11 +293,10 @@ def create_inspectables():
         InspectableObject("matNotaE", -9.0343, 1.7336, 2.4406),
         InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
         InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
+        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name=""),
         
-        
-        
-        # Aquí instancias tu machete pasándole una LISTA con los nombres de sus materiales en Blender
-        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="")
+        # Add the Safe Key as an interactive object located inside the safe coordinates
+        InspectableObject(["matLlave", "matPllave"], -6.2983, 0.90647, -0.60902, name="Key")
     ]
 
         
@@ -447,17 +447,20 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
     return closest_door
 
 def toggle_nearest_visible_door(setting_doors, house, camera, safe_ui, max_distance=2.5):
-    """
-    Evaluates interaction with the nearest door. Triggers the safe interface 
-    if the door is designated as a locked safe.
-    """
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
-        # Check if it's the safe and it's closed
+        # Evaluate safe interaction
         if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
             if getattr(target_door, 'is_locked', True):
                 safe_ui.active = True
                 return
+                
+        # Evaluate key requirement
+        if getattr(target_door, 'requires_key', False):
+            if not getattr(camera, 'has_key', False):
+                return # Block opening if key is missing
+            else:
+                setattr(target_door, 'requires_key', False) # Unlock the door permanently
                 
         target_door.toggle()
         

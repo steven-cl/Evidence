@@ -136,7 +136,7 @@ def create_shadowed_text_texture(text, font, color):
     
     return tex_id, cw, ch
 
-def draw_game_ui(width, height, remaining_time, action_text=None):
+def draw_game_ui(width, height, remaining_time, action_text=None, notification_text=None):
     init_fonts()
     
     glMatrixMode(GL_PROJECTION)
@@ -161,7 +161,6 @@ def draw_game_ui(width, height, remaining_time, action_text=None):
     # 1. PAUSE INDICATOR 
     pause_text = "[ESC] Pause"
     tex_p, w_p, h_p = create_shadowed_text_texture(pause_text, _ui_font, (220, 220, 220))
-    
     glBindTexture(GL_TEXTURE_2D, tex_p)
     glBegin(GL_QUADS)
     glTexCoord2f(0, 0); glVertex2f(25, 25)
@@ -178,7 +177,6 @@ def draw_game_ui(width, height, remaining_time, action_text=None):
     
     timer_color = (255, 60, 60) if remaining_time < 60.0 else (240, 240, 240)
     tex_t, w_t, h_t = create_shadowed_text_texture(timer_text, _ui_font, timer_color)
-    
     x_pos_timer = width - w_t - 25
     
     glBindTexture(GL_TEXTURE_2D, tex_t)
@@ -193,10 +191,8 @@ def draw_game_ui(width, height, remaining_time, action_text=None):
     # 3. INTERACTION INDICATOR
     if action_text:
         tex_i, w_i, h_i = create_shadowed_text_texture(action_text, _ui_font, (255, 255, 255))
-        
         x_pos_interact = (width - w_i) // 2
         y_pos_interact = 40 
-        
         glBindTexture(GL_TEXTURE_2D, tex_i)
         glBegin(GL_QUADS)
         glTexCoord2f(0, 0); glVertex2f(x_pos_interact, y_pos_interact)
@@ -205,6 +201,20 @@ def draw_game_ui(width, height, remaining_time, action_text=None):
         glTexCoord2f(0, 1); glVertex2f(x_pos_interact, y_pos_interact + h_i)
         glEnd()
         glDeleteTextures([tex_i])
+
+    # 4. NOTIFICATION INDICATOR (For Key Collection)
+    if notification_text:
+        tex_n, w_n, h_n = create_shadowed_text_texture(notification_text, _ui_font, (255, 255, 100)) # Yellowish text
+        x_pos_notif = (width - w_n) // 2
+        y_pos_notif = 80 
+        glBindTexture(GL_TEXTURE_2D, tex_n)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 0); glVertex2f(x_pos_notif, y_pos_notif)
+        glTexCoord2f(1, 0); glVertex2f(x_pos_notif + w_n, y_pos_notif)
+        glTexCoord2f(1, 1); glVertex2f(x_pos_notif + w_n, y_pos_notif + h_n)
+        glTexCoord2f(0, 1); glVertex2f(x_pos_notif, y_pos_notif + h_n)
+        glEnd()
+        glDeleteTextures([tex_n])
     
     glDisable(GL_TEXTURE_2D)
     glDisable(GL_BLEND)
@@ -365,6 +375,10 @@ def setup_camera(screen_width, screen_height):
     camera.pitch = -45.0 
     camera.yaw = -90.0   
 
+    # Variables for inventory and notifications
+    camera.has_key = False
+    camera.key_message_timer = 0.0
+
     camera.update_camera_vectors()
     return camera
 
@@ -389,11 +403,29 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                 inspected_object = None
             else:
                 grabbed = False
+                looked_obj = None
                 for obj in setting_inspectables:
                     if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
-                        inspected_object = obj
-                        grabbed = True
+                        
+                        # Block key interaction if safe is closed ---
+                        if getattr(obj, 'name', '') == 'Key':
+                            safe_door = next((d for d in setting_doors if getattr(d, 'is_safe', False)), None)
+                            if safe_door and not getattr(safe_door, 'is_open', False):
+                                continue # Pretend the key is not there and keep scanning
+                                
+                        looked_obj = obj
                         break
+                
+                if looked_obj:
+                    # If the object is the key, collect it instead of inspecting
+                    if getattr(looked_obj, 'name', '') == 'Key':
+                        camera.has_key = True
+                        camera.key_message_timer = 3.0 # Show text for 3 seconds
+                        setting_inspectables.remove(looked_obj) # Make it disappear from the world
+                        grabbed = True
+                    else:
+                        inspected_object = looked_obj
+                        grabbed = True
                 
                 if not grabbed:
                     toggle_nearest_visible_door(setting_doors, house, camera, safe_ui)
@@ -517,6 +549,13 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
         camera.update_view()
         update_doors(setting_doors, dt)
 
+        # Determine notifications
+        if camera.key_message_timer > 0:
+            camera.key_message_timer -= dt
+            notification_text = "You have taken the key"
+        else:
+            notification_text = None
+
         action_text = None
         looked_obj = None
         
@@ -525,17 +564,31 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
         else:
             for obj in setting_inspectables:
                 if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
+                    
+                    # --- NEW LOGIC: Block key text prompt if safe is closed ---
+                    if getattr(obj, 'name', '') == 'Key':
+                        safe_door = next((d for d in setting_doors if getattr(d, 'is_safe', False)), None)
+                        if safe_door and not getattr(safe_door, 'is_open', False):
+                            continue # Ignore the key and keep scanning
+                            
                     looked_obj = obj
                     break
             
             if looked_obj:
-                nombre = getattr(looked_obj, 'name', 'Object')
-                action_text = f"Press [E] to Inspect {nombre}"
+                # Custom text for the Key
+                if getattr(looked_obj, 'name', '') == 'Key':
+                    action_text = "Press [E] to take the key"
+                else:
+                    nombre = getattr(looked_obj, 'name', 'Object')
+                    action_text = f"Press [E] to Inspect {nombre}"
             else:
                 target_door = get_looked_at_door(setting_doors, house, camera)
                 if target_door:
-                    is_open = getattr(target_door, 'is_open', False)
-                    action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
+                    if getattr(target_door, 'requires_key', False) and not getattr(camera, 'has_key', False):
+                        action_text = "Locked - Key required"
+                    else:
+                        is_open = getattr(target_door, 'is_open', False)
+                        action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
 
         # Suppress interaction text if UI is blocking the view
         if safe_ui.active:
@@ -551,7 +604,9 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
             pass 
 
         draw_crosshair(camera.width, camera.height)
-        draw_game_ui(camera.width, camera.height, game_time, action_text)
+        
+        # ADD NOTIFICATION TEXT TO DRAW CALL
+        draw_game_ui(camera.width, camera.height, game_time, action_text, notification_text)
 
         if debug_state.overlay:
             draw_debug_visuals(camera, house, setting_doors, debug_state.wireframe)
