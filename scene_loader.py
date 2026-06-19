@@ -1,5 +1,4 @@
 from OpenGL.GL import *
-
 from obj_loader import Model3D
 from pared import Texture
 from door_In import Door
@@ -235,21 +234,6 @@ def create_doors():
 
     ]
 
-#Notas
-
-#Nota 1: La casa estuvo abandonada mucho tiempo, como alguien podría vivir en condiciones tan precarias como estas, a menos que, la vida sea lo último que tenga un valor aquí.
-
-#Nota 2: DollMaker suele ver su reloj 4 veces cuando esta torturando a sus víctimas, un hombre obsesionado con el tiempo nunca vive en paz.
-
-#Nota 3: Podrías probar a ingresar los números en orden ascendente.
-
-#Nota 4: El tiempo es un asesino silencioso, quizás esta vez te ayude capturar a uno.
-
-#Nota 5: Me levanté temprano hoy, desayuné muy tranquilamente sabiendo que le di la eternidad y belleza de una muñeca a todas ellas.
-
-#Nota 6: Al principio suelen ser ruidosas, pero una vez que se dan cuenta de que les hice un favor dejan de quejarse. Supongo que es parte de compartirme su felicidad.
-
-
 
 def build_door_material_set(setting_doors):
     door_materials = set()
@@ -259,19 +243,14 @@ def build_door_material_set(setting_doors):
     return door_materials
 
 
-# List of the objects that we are inspectables
-#Thi shit is so important
-
-# NEW: Extract the material names of the objects for exclusion.
 def build_inspectable_material_set(setting_inspectables):
     inspectable_materials = set()
     for obj in setting_inspectables:
-        # Loop through the list of materials inside each object
         for mat in obj.mat_names:
             inspectable_materials.add(mat)
     return inspectable_materials
 
-# NEW: Generate the list of interactive objects that can be inspected.
+
 def create_inspectables():
     from inspect_obj import InspectableObject
     return [
@@ -285,66 +264,30 @@ def create_inspectables():
         InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
         InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
         
-        
-        
-        # Aquí instancias tu machete pasándole una LISTA con los nombres de sus materiales en Blender
-        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="")
+        # Machete instance using multiple Blender materials mapping keys
+        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="Machete")
     ]
-
-        
 
 
 def load_scene_assets():
-    # 1. Load static configuration
     visual_config = create_visual_config()
     setting_doors = create_doors()
     door_materials = build_door_material_set(setting_doors)
     
-    # 2. Load inspectable objects configuration
     setting_inspectables = create_inspectables()
     inspectable_materials = build_inspectable_material_set(setting_inspectables)
     
-    # 3. Merge all dynamic materials to tell Model3D to separate them
     all_dynamic_materials = door_materials.copy()
     all_dynamic_materials.update(inspectable_materials)
     
-    # 4. Load the house
     house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=all_dynamic_materials)
     
-    # 5. RETURN THE EXACT 6 VALUES EXPECTED BY MAIN.PY
     return house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials
-
-
-def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.0):
-    """
-    Evaluates nearby interactive items to trigger the closest door animation sequence.
-    Returns True if an interaction successfully occurred, otherwise returns False.
-    """
-    closest_door = None
-    min_dist = max_distance
-
-    for door in setting_doors:
-        # Check if the camera is looking at the door and within view angles
-        if door.doorAction(camera.pos_x, camera.pos_z, camera.front_x, camera.front_z):
-            dist = door.get_distance(camera.pos_x, camera.pos_z)
-            if dist < min_dist:
-                min_dist = dist
-                closest_door = door
-
-    # If a valid door structure object is within range bounds, execute toggle sequence
-    if closest_door:
-        closest_door.toggle()
-        return True  # Interaction successfully verified and triggered
-
-    return False  # No interactive door components detected within range boundaries
 
 
 def apply_material(material_name, config_visual):
     if material_name in config_visual:
         assigned = config_visual[material_name]
-def apply_material(material_name, visual_config):
-    if material_name in visual_config:
-        assigned = visual_config[material_name]
         if isinstance(assigned, Texture):
             glEnable(GL_TEXTURE_2D)
             glColor3f(1.0, 1.0, 1.0)
@@ -359,19 +302,13 @@ def apply_material(material_name, visual_config):
         glColor3f(0.6, 0.6, 0.6)
 
 
-
-
-
-#Added the 4th parameter 'inspectable_materials'
 def draw_static_model(house, visual_config, door_materials, inspectable_materials=None):
     glPushMatrix()
 
     for material_name in house.materiales.keys():
-        # 1. Ignore dynamic doors
         if material_name in door_materials:
             continue
             
-        # 2. NEW: Ignore inspectable objects so they don't stick to tables
         if inspectable_materials and material_name in inspectable_materials:
             continue
 
@@ -394,18 +331,15 @@ def draw_doors(setting_doors, house, visual_config):
         door.draw(house, visual_config)
 
 
-# NUEVO: Añadido el parámetro looked_obj
 def draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config, looked_obj=None):
-    """Dibuja los objetos estáticos en el mundo, ignorando el que tienes en la mano"""
     for obj in setting_inspectables:
         if obj != inspected_object:
-            # Calculate if we are looking the object
             is_highlighted = (obj == looked_obj)
             obj.draw_world(house, visual_config, is_highlighted)
 
+
 def draw_inspected_hud(inspected_object, house, visual_config):
     if inspected_object:
-        # we gotta clear the depth buufer so the obj doesn't go through the walls 
         glClear(GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         inspected_object.draw_hud(house, visual_config)
@@ -439,9 +373,8 @@ def ray_intersects_triangle(ray_origin, ray_vector, tri):
         return True, t 
     return False, 0.0
 
+
 def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
-   
-   #use the ray to know what door we are looking at
     ray_origin = glm.vec3(camera.pos_x, camera.pos_y, camera.pos_z)
     ray_dir = glm.vec3(camera.front_x, camera.front_y, camera.front_z)
     
@@ -465,14 +398,23 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
 
     return closest_door
 
-def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.5):
+
+# CLEAN UNIFICATION: Removed duplicated simple proximity function to preserve precise Raycast logic exclusively
+def toggle_nearest_visible_door(setting_doors, house, camera, audio=None, max_distance=2.5):
     """
     Opens or closes the door only if the detective is looking directly at its geometry triangles.
-    Returns True if an interaction successfully occurred, otherwise returns False.
+    Fires localized open/close SFX triggers using the provided AudioManager instance.
     """
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
         target_door.toggle()
-        return True  # Perfect! A door structure was targeted and activated.
         
-    return False  # Raycast missed or door is too far away from the detective.
+        # ACOUSTIC FEEDBACK BRIDGE: Execute sound effects depending on state
+        if audio:
+            if getattr(target_door, 'is_open', False):
+                audio.play_sfx("door_open")
+            else:
+                audio.play_sfx("door_close")
+        return True
+        
+    return False

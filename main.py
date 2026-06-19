@@ -5,6 +5,8 @@ from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from audio_manager import AudioManager
+import glm   
+
 
 # Import internal gameplay modules
 from menu import MainMenu
@@ -19,7 +21,8 @@ from scene_loader import (
     update_doors,
     draw_doors,
     draw_inspectables_world,
-    draw_inspected_hud
+    draw_inspected_hud,
+    ray_intersects_triangle
 )
 
 #PERSISTENCE ENGINE (SAVING)
@@ -322,12 +325,12 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
     glEnable(GL_TEXTURE_2D)
     glEnable(GL_FOG)
 
-def setup_fog():
+def setup_fog(density):
     """Configures global OpenGL exponential fog parameters for atmospheric mystery effect"""
     glEnable(GL_FOG)
     glFogi(GL_FOG_MODE, GL_EXP2)
-    glFogf(GL_FOG_DENSITY, 0.18)
-    fog_color = [0.1, 0.1, 0.15, 1.0]
+    glFogf(GL_FOG_DENSITY, density)
+    fog_color = [0.25, 0.26, 0.30, 1.0]
     glFogfv(GL_FOG_COLOR, fog_color)
     glHint(GL_FOG_HINT, GL_NICEST)
 
@@ -395,10 +398,24 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                     if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
                         inspected_object = obj
                         grabbed = True
+
+                        obj_name = getattr(obj, 'name', '').lower()
+                        # Join all materials in a single string to easily scan them (e.g., ['matBotella4'] -> "matbotella4")
+                        obj_mats = "".join(getattr(obj, 'mat_names', [])).lower()
+
+                        # TRIGGER: Detect object type name to play specific environmental SFX
+                        if "botella" in obj_name or "glass" in obj_name or "botella" in obj_mats:
+                            audio.play_sfx("inspect_glass")
+                        elif "papel" in obj_name or "paper" in obj_name or "nota" in obj_name or "nota" in obj_mats:
+                            audio.play_sfx("inspect_paper")
+                        elif "machete" in obj_name or "knife" in obj_name or "machete" in obj_mats:
+                            audio.play_sfx("inspect_knife")
+                        else:
+                            audio.play_sfx("ui_click") # Default fallback
                         break
                 
                 if not grabbed:
-                    toggle_nearest_visible_door(setting_doors, house, camera)
+                    toggle_nearest_visible_door(setting_doors, house, camera, audio)
             
         elif event.key == pygame.K_F1:
             debug_state.overlay = not debug_state.overlay
@@ -418,7 +435,7 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                 
     return inspected_object
 
-def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object):
+def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, inspected_object
@@ -449,15 +466,21 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
             if menu.state == 'QUIT':
                 return False, inspected_object
         elif menu.state == 'GAME':
-            inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object)
+            inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio)
+        
+    # RE-MIXER OPTIMIZATION: Instant dynamic volume tracking during adjustments
+    if menu.state == 'OPTIONS':
+        audio.set_volume(menu.volume)
 
     return True, inspected_object
 
-def render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt, house_display_list):
-    """Draws spatial object models and environment geometry profiles"""
+def render_game_world(camera, skybox, house, config_visual, setting_doors, door_materials, dt, house_display_list, current_fog_density, setting_inspectables, inspected_object, looked_obj):
+    """Draws spatial object models and environment geometry profiles with isolated Skybox rendering"""
+
+    # PHASE 1: SKYBOX (Rendered flat, completely immune to vertex fog calculations to prevent the cube artifact)
     glDisable(GL_DEPTH_TEST)
     glDisable(GL_FOG)
-
+    
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
 
@@ -466,22 +489,33 @@ def render_game_world(camera, skybox, house, config_visual, setting_doors, door_
         camera.front_x, camera.front_y, camera.front_z,
         0.0, 1.0, 0.0,
     )
+
+    glEnable(GL_FOG)
+    glDisable(GL_DEPTH_TEST)
     skybox.draw()
 
+    # PHASE 2: PHYSICAL WORLD (Re-enabling depth and updating dynamic EXP2 atmospheric fog)
+    
     glEnable(GL_DEPTH_TEST)
-    glEnable(GL_FOG)
+    
+    setup_fog(current_fog_density)
 
     camera.update_view()
     update_doors(setting_doors, dt)
     
-    #
+    # Draw static world geometry optimized from VRAM
     glCallList(house_display_list)
     
+    # Draw interactive and dynamic environment entities
+    draw_inspectables_world(setting_inspectables, inspected_object, house, config_visual, looked_obj)
     draw_doors(setting_doors, house, config_visual)
+    draw_inspected_hud(inspected_object, house, config_visual)
 
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, audio):
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, current_fog_density, audio, setting_inspectables, inspected_object):
     """Executes specific clear procedures and decides whether to paint UI or 3D spaces matrices"""
-    glClearColor(0.1, 0.1, 0.15, 1.0)
+
+    _updated_density = current_fog_density
+    glClearColor(0.25, 0.26, 0.30, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     if menu.state in ['MENU', 'OPTIONS']:
@@ -500,23 +534,22 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         else:
             camera.process_mouse(dx, dy) 
         
-        #SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING
+        # SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING
         CELL_SIZE = 2.0 
 
-        # 1. Identify the 3D grid cell currently occupied by the player
+        # Identify the 3D grid cell currently occupied by the player
         cell_x = int(camera.pos_x // CELL_SIZE)
         cell_y = int(camera.pos_y // CELL_SIZE)
         cell_z = int(camera.pos_z // CELL_SIZE)
 
         nearby_triangles = set()
 
-        # 3. Query the current cell and the 26 surrounding 3D cells (27 cells total, 3x3x3 block)
+        # Query the current cell and the 26 surrounding 3D cells (27 cells total, 3x3x3 block)
         for x in range(cell_x - 1, cell_x + 2):
             for y in range(cell_y - 1, cell_y + 1):
                 for z in range(cell_z - 1, cell_z + 2):
                     cell_key = (x, y, z)
                     if cell_key in house.grid:
-                        # house.grid returns a list of triangles within the queried 3D voxel
                         nearby_triangles.update(house.grid[cell_key])
 
         frame_colliders = list(nearby_triangles)
@@ -524,25 +557,29 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         for door in setting_doors:
             frame_colliders.extend(door.get_transformed_triangles(house))
 
-        #EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED COLLIDERS
+        # Dynamic fog transitions based on courtyard boundaries coordinates
+        if (camera.pos_z < -5.8) or (camera.pos_z > 4.0) or (camera.pos_x < -8.5) or (camera.pos_x > 3.8):
+            # Player is standing in the outside courtyard (Increased density to 0.12 for visibility visibility)
+            target_density = 0.1
+        else:
+            # Player is inside the building geometry limits
+            target_density = 0.17
+
+        interpolation_speed = 1.8
+        _updated_density = current_fog_density + (target_density - current_fog_density) * interpolation_speed * dt
+
+        # Process movement keyboard layout
+        keys = pygame.key.get_pressed()
+        is_moving = keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]
+        
         if not inspected_object:
             camera.process_keyboard(dt, frame_colliders)
         
-        glDisable(GL_DEPTH_TEST)
-        glDisable(GL_FOG)
-
+        # Track auditory pacing steps
         is_grounded = getattr(camera, 'is_grounded', True)
         audio.update_footsteps(dt, is_moving, is_grounded)
 
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_FOG)
-
-        camera.update_view()
-        update_doors(setting_doors, dt)
-
-       
-        # 1. Calculate what we are looking at
-       
+        # Calculate object inspection lookat rays
         action_text = None
         looked_obj = None
         
@@ -563,18 +600,17 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
                     is_open = getattr(target_door, 'is_open', False)
                     action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
 
-        
-        # 2. 3D RENDERING
-       
+        # EXECUTE UNIFIED GRAPHICS WORLD RENDER PASS
         try:
-            glCallList(house_display_list)
-            # Pass 'looked_obj' to the drawing function to trigger the glowing outline
-            draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config, looked_obj)
-            draw_doors(setting_doors, house, visual_config)
-            draw_inspected_hud(inspected_object, house, visual_config)
+            render_game_world(
+                camera, skybox, house, config_visual, setting_doors, door_materials, 
+                dt, house_display_list, _updated_density, setting_inspectables, 
+                inspected_object, looked_obj
+            )
         except OpenGL.error.Error:
             pass # The OpenGL context is resetting; ignore this frame to prevent crashing
 
+        # Render 2D Overlays on top of the 3D projection matrix scene viewport
         draw_crosshair(camera.width, camera.height)
         draw_game_ui(camera.width, camera.height, game_time, action_text)
 
@@ -603,15 +639,23 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             glEnable(GL_FOG); glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix()
 
     pygame.display.flip()
+    return _updated_density
 
 def main():
     screen_width, screen_height, saved_settings = setup_display()
 
+    current_fog_density = 0.04
+
     # Initialize AudioManager
     audio = AudioManager()
-    audio.load_sfx("ui_click", "click.wav")
+
     audio.load_sfx("door_open", "door_open.wav")    
     audio.load_sfx("door_close", "door_close.wav") 
+    audio.load_sfx("inspect_paper", "paper_rustle.wav")
+    audio.load_sfx("inspect_glass", "glass_clink.wav")
+    
+    audio.load_sfx("inspect_knife", "knife.wav")
+    audio.load_sfx("ui_click", "click.wav")
     audio.load_sfx("footstep", "footstep.wav")
     
     audio.play_ambient_music("suspense_ambient.mp3", loops=-1)
@@ -630,22 +674,20 @@ def main():
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
     glEnable(GL_DEPTH_TEST)
-    setup_fog()
+    setup_fog(current_fog_density)
     
     pygame.event.set_blocked(None)
 
-    house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials = load_scene_assets()
+    house, config_visual, setting_doors, door_materials, setting_inspectables, inspectable_materials = load_scene_assets()
     
     static_colliders = list(house.colliders)
     
-   
     # --- RENDER OPTIMIZATION: OPENGL DISPLAY LISTS ---
     # Compile the static geometry of the house directly into VRAM to drastically reduce draw calls
     house_display_list = glGenLists(1)
     glNewList(house_display_list, GL_COMPILE)
-    draw_static_model(house, visual_config, door_materials, inspectable_materials)
+    draw_static_model(house, config_visual, door_materials, inspectable_materials)
     glEndList()
-   
     
     render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
     
@@ -654,8 +696,6 @@ def main():
     
     clock = pygame.time.Clock()
     running = True
-
-    glClearColor(0.1, 0.1, 0.15, 1.0)
     
     inspected_object = None
 
@@ -664,7 +704,7 @@ def main():
         dt = min(dt, 0.05) 
 
         pygame.event.pump()
-        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object)
+        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio)
         
         if running and menu.state == 'GAME':
             game_time -= dt
@@ -673,7 +713,14 @@ def main():
                 running = False 
         
         if running:
-            render_frame(menu, camera, skybox, house, visual_config, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, setting_inspectables, inspected_object)
+            current_fog_density = render_frame(
+                menu, camera, skybox, house, config_visual, setting_doors, 
+                door_materials, dt, clock, debug_state, game_time, 
+                house_display_list, static_colliders, current_fog_density, audio,
+                setting_inspectables, inspected_object
+            )
+        
+        pygame.event.pump()
 
     save_settings(camera, menu)
     pygame.quit()
