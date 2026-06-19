@@ -850,7 +850,7 @@ def main():
     skybox = setup_skybox()
     
     debug_state = DebugState()
-    game_time = 3 * 62  # 15 minutes detective exploration session timer limit
+    game_time = 15 * 60  # 15 minutes detective exploration session timer limit
     
     # Render loading screen to cover map compilation hitches
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
