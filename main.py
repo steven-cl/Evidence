@@ -517,6 +517,17 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
     _updated_density = current_fog_density
     glClearColor(0.25, 0.26, 0.30, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    
+    needs_mouse_visible = (menu.state in ['MENU', 'OPTIONS']) or safe_ui.active
+    
+    if getattr(camera, 'mouse_visible_state', None) != needs_mouse_visible:
+        if needs_mouse_visible:
+            pygame.event.set_grab(False)
+            pygame.mouse.set_visible(True)
+        else:
+            pygame.event.set_grab(True)
+            pygame.mouse.set_visible(False)
+        camera.mouse_visible_state = needs_mouse_visible
 
     if menu.state in ['MENU', 'OPTIONS']:
         pygame.event.set_grab(False)

@@ -49,8 +49,14 @@ class MainMenu:
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU' and event.button == 1:
+                        # FIX: Forzar la actualización del índice al hacer clic
+                        self.selected_index = idx 
                         self.execute_selection()
+                        
                     elif self.state == 'OPTIONS':
+                        # FIX: Forzar la actualización del índice al hacer clic
+                        self.options_selection = idx 
+                        
                         if self.options_selection == 2 and event.button == 1: 
                             self.state = 'MENU'
                         elif event.button == 1: 
