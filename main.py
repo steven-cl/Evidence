@@ -678,7 +678,9 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         # Phase 1: Render Skybox (Requires depth test off so it draws infinitely far away)
         glDisable(GL_DEPTH_TEST)
-        glDisable(GL_FOG)
+        
+        glEnable(GL_FOG)
+        setup_fog(_updated_density)
 
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
@@ -691,9 +693,6 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
 
         # Phase 2: Render 3D World Geometry
         glEnable(GL_DEPTH_TEST)
-        glEnable(GL_FOG)
-        
-        setup_fog(_updated_density)
 
         camera.update_view()
         update_doors(setting_doors, dt)
