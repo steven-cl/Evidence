@@ -258,6 +258,8 @@ def create_doors():
 
 #Nota 6: Al principio suelen ser ruidosas, pero una vez que se dan cuenta de que les hice un favor dejan de quejarse. Supongo que es parte de compartirme su felicidad.
 
+#Nota 7: Como las amo, las tengo a todas conmigo, no necesito nada más. No me importa si el mundo se acaba mañana, mientras las tenga a ellas, estaré bien.
+
 
 
 def build_door_material_set(setting_doors):
