@@ -216,24 +216,33 @@ def create_visual_config():
 
 
 def create_doors():
-    return [
+    doors = [
         Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
         Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
         Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
         Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
-        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
+        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),
         Door("matManiCaja", -6.055, 1.2843, -1.0216, "matN", -6.0372, 1.284, -0.80611),
-
         Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matManivela3", -8.7069, 1.4967, 2.3771, -1.0),
         Door("matGabinete6", -8.7252, 1.7951, 0.61547, "matManivela6", -8.7069, 1.4967, 1.2762),
         Door("matGabinete8", -7.7657, 0.26301, 1.079, "matManivela8", -7.3133, 0.091964, 1.0919, -1.0),
         Door("matGabinete7", -6.7669, 0.26301, 1.079, "matManivela7", -7.2203, 0.091964, 1.0919),
         Door("matGabinete", -8.7261, 2.026, 4.0371, "matManivela2", -8.7132, 1.9285, 3.5848, -1.0),
-        
-
     ]
+    
+    for door in doors:
+        is_safe_door = (door.mat == "matManiCaja")
+        setattr(door, 'is_safe', is_safe_door)
+        setattr(door, 'is_locked', is_safe_door)
+        
+        # Require key to open Door #7
+        if door.mat == "matPuerta6":
+            setattr(door, 'requires_key', True)
+            setattr(door, 'is_locked', True)
+            
+    return doors
 
 #Notas
 
@@ -284,11 +293,10 @@ def create_inspectables():
         InspectableObject("matNotaE", -9.0343, 1.7336, 2.4406),
         InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
         InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
+        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name=""),
         
-        
-        
-        # Aquí instancias tu machete pasándole una LISTA con los nombres de sus materiales en Blender
-        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="")
+        # Add the Safe Key as an interactive object located inside the safe coordinates
+        InspectableObject(["matLlave", "matPllave"], -6.2983, 0.90647, -0.60902, name="Key")
     ]
 
         
@@ -438,8 +446,24 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
 
     return closest_door
 
-def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.5):
-    #open or close the door
+def toggle_nearest_visible_door(setting_doors, house, camera, safe_ui, max_distance=2.5):
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
+        # Evaluate safe interaction
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            if getattr(target_door, 'is_locked', True):
+                safe_ui.active = True
+                return
+                
+        # Evaluate key requirement
+        if getattr(target_door, 'requires_key', False):
+            if not getattr(camera, 'has_key', False):
+                return # Block opening if key is missing
+            else:
+                setattr(target_door, 'requires_key', False) # Unlock the door permanently
+                
         target_door.toggle()
+        
+        # Auto-lock the safe when closed again
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            target_door.is_locked = True
