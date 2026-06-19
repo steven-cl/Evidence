@@ -33,7 +33,9 @@ class SafeInterface:
         self.error_led_rect = (0.325, 0.48, 0.02, 0.025)
         
         pygame.font.init()
-        self.font = pygame.font.SysFont("Courier New", 32, bold=True)
+        # Main font for the digital display
+        self.font = pygame.font.SysFont("Courier New", 36, bold=True)
+        self.font_small = pygame.font.SysFont("Courier New", 24, bold=True)
 
     def load_texture(self, image_path):
         """
@@ -55,7 +57,7 @@ class SafeInterface:
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.img_width, self.img_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
         return tex_id
 
-    def handle_event(self, event):
+    def handle_event(self, event, audio=None):
         """
         Processes keyboard and mouse inputs when the safe UI is active.
         Returns True if the correct password was entered, unlocking the safe.
@@ -65,9 +67,17 @@ class SafeInterface:
             
         # --- KEYBOARD INPUT HANDLING ---
         if event.type == pygame.KEYDOWN:
+            
+            # 1. Siempre permitir salir con ESC, incluso si hay error
             if event.key == pygame.K_ESCAPE:
                 self.active = False
                 self.input_buffer = ""
+                self.error_timer = 0.0 # Resetea el error al salir
+                return False
+                
+            # --- NUEVO: BLOQUEO POR ERROR ---
+            # Si el LED de error está encendido, ignorar cualquier otra tecla
+            if self.error_timer > 0:
                 return False
                 
             if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
@@ -76,26 +86,33 @@ class SafeInterface:
                 if self.input_buffer == self.password:
                     self.active = False
                     self.input_buffer = ""
+                    if audio: audio.play_sfx("safe_unlock")
                     return True 
                 else:
                     self.input_buffer = ""
                     self.error_timer = 2.0 
+                    if audio: audio.play_sfx("safe_error")
                 return False
 
             if event.key == pygame.K_BACKSPACE:
                 self.input_buffer = self.input_buffer[:-1]
+                if audio: audio.play_sfx("safe_beep")
                 return False
 
             char = event.unicode
             if char in self.key_rects:
-                if len(self.input_buffer) < 6:
+                if len(self.input_buffer) < 20: 
                     self.input_buffer += char
                 self.flashing_key = char
                 self.flash_timer = 0.15 
+                if audio: audio.play_sfx("safe_beep")
                 
         # --- MOUSE INPUT HANDLING ---
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            # Dynamically fetch screen dimensions to compute projection offsets
+            
+            if self.error_timer > 0:
+                return False
+
             screen_width, screen_height = pygame.display.get_surface().get_size()
             scale = min(screen_width * 0.8 / self.img_width, screen_height * 0.8 / self.img_height)
             draw_w = self.img_width * scale
@@ -113,10 +130,11 @@ class SafeInterface:
                 kh = rh * draw_h
                 
                 if kx <= mx <= kx + kw and ky <= my <= ky + kh:
-                    if len(self.input_buffer) < 6:
+                    if len(self.input_buffer) < 20:
                         self.input_buffer += char
                     self.flashing_key = char
                     self.flash_timer = 0.15 
+                    if audio: audio.play_sfx("safe_beep")
                     return False
             
             # Evaluate physical circular knob interaction (ENTER)
@@ -132,10 +150,12 @@ class SafeInterface:
                 if self.input_buffer == self.password:
                     self.active = False
                     self.input_buffer = ""
+                    if audio: audio.play_sfx("safe_unlock")
                     return True
                 else:
                     self.input_buffer = ""
                     self.error_timer = 2.0
+                    if audio: audio.play_sfx("safe_error")
                 return False
 
         return False
@@ -149,11 +169,14 @@ class SafeInterface:
         if self.error_timer > 0:
             self.error_timer -= dt
 
-    def draw_text(self, text, x, y, screen_width, screen_height, color=(255, 50, 50)):
+    def draw_text(self, text, x, y, font, color=(255, 50, 50)):
         """
-        Renders error text on the screen.
+        Renders dynamic text on the screen.
         """
-        text_surface = self.font.render(text, True, color)
+        if not text:
+            return
+            
+        text_surface = font.render(text, True, color)
         text_data = pygame.image.tobytes(text_surface, "RGBA", True)
         w, h = text_surface.get_size()
         
@@ -164,6 +187,11 @@ class SafeInterface:
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
         
         glEnable(GL_TEXTURE_2D)
+        
+        # --- FIX: Limpiar el color de OpenGL para que la textura brille al 100% ---
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+        # --------------------------------------------------------------------------
+        
         glBegin(GL_QUADS)
         glTexCoord2f(0, 1); glVertex2f(x, y)
         glTexCoord2f(1, 1); glVertex2f(x + w, y)
@@ -175,7 +203,7 @@ class SafeInterface:
 
     def draw(self, screen_width, screen_height):
         """
-        Renders the safe interface, button flashes, and error indicators using orthographic projection.
+        Renders the safe interface, button flashes, digital screen, and error indicators.
         """
         if not self.active or self.texture_id is None:
             return
@@ -196,6 +224,7 @@ class SafeInterface:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+        # 1. Dark background overlay
         glColor4f(0.0, 0.0, 0.0, 0.85)
         glDisable(GL_TEXTURE_2D)
         glBegin(GL_QUADS)
@@ -203,12 +232,14 @@ class SafeInterface:
         glVertex2f(screen_width, screen_height); glVertex2f(0, screen_height)
         glEnd()
 
+        # Scale and offset math
         scale = min(screen_width * 0.8 / self.img_width, screen_height * 0.8 / self.img_height)
         draw_w = self.img_width * scale
         draw_h = self.img_height * scale
         x_offset = (screen_width - draw_w) / 2
         y_offset = (screen_height - draw_h) / 2
 
+        # 2. Draw Main Texture
         glEnable(GL_TEXTURE_2D)
         glColor4f(1.0, 1.0, 1.0, 1.0)
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
@@ -220,12 +251,33 @@ class SafeInterface:
         glTexCoord2f(0, 0); glVertex2f(x_offset, y_offset + draw_h)
         glEnd()
         
-        glDisable(GL_TEXTURE_2D)
+        # 3. Draw Digital Screen (LCD)
+        disp_x = x_offset + (0.39 * draw_w)
+        disp_y = y_offset + (0.09 * draw_h)
+        disp_w = 0.38 * draw_w
+        disp_h = 0.12 * draw_h
 
-        # Highlight logic for interactive bounds
+        glDisable(GL_TEXTURE_2D)
+        # LCD Dark Background
+        glColor4f(0.05, 0.08, 0.05, 1.0) 
+        glBegin(GL_QUADS)
+        glVertex2f(disp_x, disp_y); glVertex2f(disp_x + disp_w, disp_y)
+        glVertex2f(disp_x + disp_w, disp_y + disp_h); glVertex2f(disp_x, disp_y + disp_h)
+        glEnd()
+
+        # LCD Border
+        glColor4f(0.15, 0.15, 0.15, 1.0)
+        glLineWidth(3.0)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        glBegin(GL_QUADS)
+        glVertex2f(disp_x, disp_y); glVertex2f(disp_x + disp_w, disp_y)
+        glVertex2f(disp_x + disp_w, disp_y + disp_h); glVertex2f(disp_x, disp_y + disp_h)
+        glEnd()
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+
+        # 4. Highlight logic for interactive bounds
         if self.flash_timer > 0:
             glColor4f(1.0, 1.0, 1.0, 0.25) 
-            
             if self.flashing_key in self.key_rects:
                 rx, ry, rw, rh = self.key_rects[self.flashing_key]
                 kx = x_offset + (rx * draw_w)
@@ -250,7 +302,7 @@ class SafeInterface:
                 glVertex2f(bx + bw, by + bh); glVertex2f(bx, by + bh)
                 glEnd()
 
-        # Render error indicator
+        # 5. Render error indicator physical LED
         if self.error_timer > 0:
             rx, ry, rw, rh = self.error_led_rect
             lx = x_offset + (rx * draw_w)
@@ -263,10 +315,21 @@ class SafeInterface:
             glVertex2f(lx, ly); glVertex2f(lx + lw, ly)
             glVertex2f(lx + lw, ly + lh); glVertex2f(lx, ly + lh)
             glEnd()
-            
-            self.draw_text("Incorrect Password", screen_width / 2 - 170, y_offset + draw_h + 30, screen_width, screen_height)
 
-        self.draw_text("Press [ESC] to Exit", 25, 25, screen_width, screen_height, (200, 200, 200))
+        # 6. Render Text on Digital LCD Screen
+        text_y_center = disp_y + (disp_h / 2) - 18
+        if self.error_timer > 0:
+            self.draw_text("ERROR", disp_x + 15, text_y_center, self.font, (255, 50, 50))
+        elif len(self.input_buffer) > 0:
+            # Show only the last 8 characters so it scrolls left like a real calculator
+            display_str = self.input_buffer[-8:]
+            self.draw_text(display_str, disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Verde Brillante Puro
+        else:
+            # Idle cursor
+            self.draw_text("_", disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Mismo verde brillante puro
+
+        # Instructions
+        self.draw_text("Press [ESC] to Exit", 25, 25, self.font_small, (200, 200, 200)) # Este ya no desaparecerá
         
         glEnable(GL_FOG)
         glEnable(GL_DEPTH_TEST)

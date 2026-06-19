@@ -451,19 +451,25 @@ def toggle_nearest_visible_door(setting_doors, house, camera, audio, safe_ui, ma
         # Evaluate key requirement
         if getattr(target_door, 'requires_key', False):
             if not getattr(camera, 'has_key', False):
-                # (Opcional) Si en el futuro tienes sonido de puerta bloqueada: audio.play_sfx("locked")
-                return # Block opening if key is missing
+                audio.play_sfx("safe_error") # Suena a bloqueado si no tienes la llave
+                return 
             else:
-                setattr(target_door, 'requires_key', False) # Unlock the door permanently
+                setattr(target_door, 'requires_key', False) 
                 
         # Open or close the door
         target_door.toggle()
         
         # Play the corresponding sound effect
-        if getattr(target_door, 'is_open', False):
-            audio.play_sfx("door_open")
+        if getattr(target_door, 'is_safe', False):
+            if getattr(target_door, 'is_open', False):
+                audio.play_sfx("safe_open")
+            else:
+                audio.play_sfx("safe_close")
         else:
-            audio.play_sfx("door_close")
+            if getattr(target_door, 'is_open', False):
+                audio.play_sfx("door_open")
+            else:
+                audio.play_sfx("door_close")
         
         # Auto-lock the safe when closed again
         if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):

@@ -494,12 +494,13 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
         elif menu.state == 'GAME':
             # Route input to Safe UI if active
             if safe_ui.active:
-                unlocked = safe_ui.handle_event(event)
+                unlocked = safe_ui.handle_event(event, audio)
                 if unlocked:
                     for door in setting_doors:
                         if getattr(door, 'is_safe', False):
                             door.is_locked = False
                             door.toggle() 
+                            audio.play_sfx("safe_open")
             else:
                 inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui)
         
@@ -726,6 +727,11 @@ def main():
     audio.load_sfx("inspect_knife", "knife.wav")
     audio.load_sfx("ui_click", "click.wav")
     audio.load_sfx("footstep", "footstep.wav")
+    
+    audio.load_sfx("safe_open", "safe_open.wav")
+    audio.load_sfx("safe_close", "safe_close.wav")
+    audio.load_sfx("safe_error", "safe_error.wav")
+    audio.load_sfx("safe_beep", "safe_beep.wav")
     
     audio.play_ambient_music("suspense_ambient.mp3", loops=-1)
 
