@@ -42,7 +42,9 @@ class MainMenu:
 
     def handle_input(self, event, camera=None, audio=None):
         if event.type == pygame.MOUSEMOTION:
-            mouse_x, mouse_y = event.pos
+            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU':
@@ -59,7 +61,9 @@ class MainMenu:
                             if audio: audio.play_sfx("ui_click")
                     
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_x, mouse_y = event.pos
+            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU' and event.button == 1:

@@ -829,6 +829,12 @@ def main():
     audio.load_sfx("you_lose", "you_lose.wav")
     audio.load_sfx("lost", "lost.mp3")
     
+    try:
+        tension_timer_snd = pygame.mixer.Sound("source/audio/sfx/timer.wav")
+    except Exception as e:
+        tension_timer_snd = None
+        print("Error when pre-charge timer:", e)
+    
     # Start the ambient menu music loop
     audio.play_ambient_music("menu.mp3", loops=-1)
     
@@ -844,7 +850,7 @@ def main():
     skybox = setup_skybox()
     
     debug_state = DebugState()
-    game_time = 15 * 60  # 15 minutes detective exploration session timer limit
+    game_time = 3 * 62  # 15 minutes detective exploration session timer limit
     
     # Render loading screen to cover map compilation hitches
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
