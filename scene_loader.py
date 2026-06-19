@@ -237,7 +237,7 @@ def create_doors():
         setattr(door, 'is_safe', is_safe_door)
         setattr(door, 'is_locked', is_safe_door)
         
-        # Require key to open Door #7
+        # Require key to open Door #6
         if door.mat == "matPuerta6":
             setattr(door, 'requires_key', True)
             setattr(door, 'is_locked', True)
