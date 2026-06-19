@@ -34,37 +34,51 @@ class MainMenu:
         
         self.hitboxes = []
 
-    def handle_input(self, event, camera=None):
+    def handle_input(self, event, camera=None, audio=None):
         if event.type == pygame.MOUSEMOTION:
             mouse_x, mouse_y = event.pos
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU':
-                        self.selected_index = idx
+                        if self.selected_index != idx: # Solo suena al entrar al botón
+                            self.selected_index = idx
+                            if audio: audio.play_sfx("ui_click")
                     elif self.state == 'OPTIONS':
-                        self.options_selection = idx
+                        if self.options_selection != idx:
+                            self.options_selection = idx
+                            if audio: audio.play_sfx("ui_click")
                     
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mouse_x, mouse_y = event.pos
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU' and event.button == 1:
+                        self.selected_index = idx 
+                        if audio: audio.play_sfx("ui_click")
                         self.execute_selection()
+                        
                     elif self.state == 'OPTIONS':
+                        self.options_selection = idx 
                         if self.options_selection == 2 and event.button == 1: 
+                            if audio: audio.play_sfx("ui_click")
                             self.state = 'MENU'
                         elif event.button == 1: 
+                            if audio: audio.play_sfx("ui_click")
                             self.adjust_option(1, camera)
                         elif event.button == 3: 
+                            if audio: audio.play_sfx("ui_click")
                             self.adjust_option(-1, camera)
 
         elif event.type == pygame.KEYDOWN:
             if self.state == 'MENU':
                 if event.key == pygame.K_UP:
                     self.selected_index = (self.selected_index - 1) % len(self.options)
+                    if audio: audio.play_sfx("ui_click")
                 elif event.key == pygame.K_DOWN:
                     self.selected_index = (self.selected_index + 1) % len(self.options)
+                    if audio: audio.play_sfx("ui_click")
                 elif event.key == pygame.K_RETURN:
+                    if audio: audio.play_sfx("ui_click")
                     self.execute_selection()
                 elif event.key == pygame.K_ESCAPE:
                     self.state = 'QUIT'
@@ -72,15 +86,20 @@ class MainMenu:
             elif self.state == 'OPTIONS':
                 if event.key == pygame.K_UP:
                     self.options_selection = (self.options_selection - 1) % len(self.options_fields)
+                    if audio: audio.play_sfx("ui_click")
                 elif event.key == pygame.K_DOWN:
                     self.options_selection = (self.options_selection + 1) % len(self.options_fields)
+                    if audio: audio.play_sfx("ui_click")
                 
                 elif event.key == pygame.K_LEFT:
+                    if audio: audio.play_sfx("ui_click")
                     self.adjust_option(-1, camera)
                 elif event.key == pygame.K_RIGHT:
+                    if audio: audio.play_sfx("ui_click")
                     self.adjust_option(1, camera)
                 
                 elif event.key == pygame.K_RETURN and self.options_selection == 2:
+                    if audio: audio.play_sfx("ui_click")
                     self.state = 'MENU'
                 elif event.key == pygame.K_ESCAPE:
                     self.state = 'MENU'
@@ -109,11 +128,9 @@ class MainMenu:
         """
         pygame.display.toggle_fullscreen()
         
-        # Retrieve the dimensions of the resulting surface to account for window borders
         surface = pygame.display.get_surface()
         new_w, new_h = surface.get_width(), surface.get_height()
         
-        # Update the OpenGL viewport and camera projection to the new resolution
         glViewport(0, 0, new_w, new_h)
         camera.width = new_w
         camera.height = new_h
@@ -210,7 +227,6 @@ class MainMenu:
     def _render_options_menu(self):
         self.draw_text_gl(self.center_x, self.center_y - 120, "FIELD ADJUSTMENTS", self.font_title, (139, 0, 0))
 
-        # Dynamic text rendering for the current display mode
         display_str = "Full Screen" if self.is_fullscreen else "Windowed"
 
         opt_text = [
