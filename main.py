@@ -486,30 +486,11 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
             menu.options_start_y = menu.center_y + 20
 
         if menu.state in ['MENU', 'OPTIONS']:
-            if menu.state == 'OPTIONS':
-                old_selection = getattr(menu, 'options_selection', 0)
-            else:
-                old_selection = getattr(menu, 'current_selection', getattr(menu, 'selection', 0))
+            menu.handle_input(event, camera, audio)
             
-            menu.handle_input(event, camera)
-            
-            if menu.state == 'OPTIONS':
-                new_selection = getattr(menu, 'options_selection', 0)
-            else:
-                new_selection = getattr(menu, 'current_selection', getattr(menu, 'selection', 0))
-            
-            if event.type == pygame.KEYDOWN:
-                if event.key in [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT]:
-                    if old_selection != new_selection:
-                        audio.play_sfx("ui_click")
-                elif event.key == pygame.K_RETURN:
-                    audio.play_sfx("ui_click")
-                    
-                    if menu.state == 'OPTIONS' and getattr(menu, 'options_selection', 0) == 0:
-                        audio.set_volume(menu.volume)
-
             if menu.state == 'QUIT':
                 return False, inspected_object
+                
         elif menu.state == 'GAME':
             # Route input to Safe UI if active
             if safe_ui.active:
@@ -734,6 +715,8 @@ def main():
 
     # Initialize AudioManager
     audio = AudioManager()
+    
+    audio.set_volume(saved_settings["volume"])
 
     audio.load_sfx("door_open", "door_open.wav")    
     audio.load_sfx("door_close", "door_close.wav") 
