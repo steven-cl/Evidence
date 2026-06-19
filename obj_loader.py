@@ -174,7 +174,8 @@ class Model3D:
 
             is_ignored_prop = any(kw in name.lower() for kw in ["manivela", "botella", "reloj", "quemador",
                                                                 "perilla", "deco", "luz", "jarron", "techo", "rodapies",
-                                                                "grama", "pie"])
+                                                                "grama", "pie", "la", "lb", "lc", "ld", "le", "lf", "lg", "lh", "lj",
+                                                                "l2", "l3", "l4", "l5", "l6", "l7", "l8", "l9"])
             if is_ignored_prop:
                 continue
 

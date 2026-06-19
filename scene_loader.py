@@ -197,7 +197,7 @@ def create_visual_config():
         "matNotaD": Texture('source/textures/texture_nota.jpg'),
         "matNotaE": Texture('source/textures/texture_nota.jpg'),
         "matNotaF": Texture('source/textures/texture_nota.jpg'),
-        "matNota2": Texture('source/textures/texture_notaB.jpg'),
+        "matNota2": Texture('source/textures/texture_nota.jpg'),
         "matPcaja": (0.45, 0.45, 0.45),
         "matPanel": Texture('source/textures/texture_caja.jpg'),
         "matN": Texture('source/textures/texture_caja.jpg'),
