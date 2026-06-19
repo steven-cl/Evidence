@@ -43,6 +43,9 @@ class CameraFPS:
         # Stance modifiers
         self.crouch_speed = 2.0 
         self.crouch_height = 1.0  
+        
+        # Stance tracker to anchor the feet during height transitions
+        self.current_stance = self.eye_height
 
         self.update_camera_vectors()
 
@@ -119,16 +122,15 @@ class CameraFPS:
                 if sphere_type != 'feet':
                     return None
                 
-                # Tolerance expanded to -1.0 to prevent falling through the floor when uncrouching
                 if has_double_sided:
-                    if dist > self.radius or dist < -1.0:
+                    if dist > self.radius or dist < -0.1:
                         return None
                 else:
                     if is_climbable:
-                        if dist > self.radius or dist < -1.0:
+                        if dist > self.radius or dist < -0.4:
                             return None
                     else:
-                        if dist > self.radius or dist < -1.0:
+                        if dist > self.radius or dist < -0.1:
                             return None
             elif is_ceiling:
                 if sphere_type != 'head':
@@ -173,8 +175,14 @@ class CameraFPS:
         """
         keys = pygame.key.get_pressed()
 
-        # Allocate local variable for dynamic stance scaling to prevent hardcoding the absolute Y world coordinate
-        current_height = self.crouch_height if keys[pygame.K_LSHIFT] else self.eye_height
+        # Determine target stance based on input
+        target_stance = self.crouch_height if keys[pygame.K_LSHIFT] else self.eye_height
+
+        # Instantly shift camera Y to keep the physical feet anchored to the ground.
+        # This prevents the feet from teleporting upwards and artificially triggering a fall through objects.
+        if target_stance != getattr(self, 'current_stance', self.eye_height):
+            self.pos_y += (target_stance - self.current_stance)
+            self.current_stance = target_stance
 
         # Crouching reduces base speed
         if keys[pygame.K_LSHIFT]:
@@ -206,9 +214,9 @@ class CameraFPS:
         self.velocity_y -= self.gravity * dt
         next_y = self.pos_y + (self.velocity_y * dt)
 
-        # 2. Define stacked bounding spheres based on the localized dynamic height parameter
-        self.feet_pos = glm.vec3(next_x, next_y - current_height + self.radius, next_z)
-        self.torso_pos = glm.vec3(next_x, next_y - (current_height / 2), next_z)
+        # 2. Define stacked bounding spheres based on the anchored stance
+        self.feet_pos = glm.vec3(next_x, next_y - self.current_stance + self.radius, next_z)
+        self.torso_pos = glm.vec3(next_x, next_y - (self.current_stance / 2), next_z)
         self.head_pos = glm.vec3(next_x, next_y, next_z)
 
         self.is_grounded = False
@@ -240,7 +248,7 @@ class CameraFPS:
         # 4. Apply the finalized and validated relaxation vectors relative to feet location
         self.pos_x = self.feet_pos.x
         self.pos_z = self.feet_pos.z
-        self.pos_y = self.feet_pos.y + current_height - self.radius
+        self.pos_y = self.feet_pos.y + self.current_stance - self.radius
 
     def update_view(self):
         """
