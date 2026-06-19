@@ -178,11 +178,11 @@ class Model3D:
             if is_ignored_prop:
                 continue
 
-            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stairs", "pilar"]
+            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stair", "pilar"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
 
             INVERTIR_NORMALES = ["matpsotano", "matpilar", "psotano", "pilar"]
-            DOBLE_CARA = ["stairs"]
+            DOBLE_CARA = ["stair"]
 
             for i in range(0, len(v), stride * 3):
                 v1 = (v[i + stride - 3], v[i + stride - 2], v[i + stride - 1])

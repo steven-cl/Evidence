@@ -215,24 +215,49 @@ def create_visual_config():
 
 
 def create_doors():
-    return [
+    doors = [
         Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
         Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
         Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
         Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
-        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
+        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),
         Door("matManiCaja", -6.055, 1.2843, -1.0216, "matN", -6.0372, 1.284, -0.80611),
-
+        
         Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matManivela3", -8.7069, 1.4967, 2.3771, -1.0),
         Door("matGabinete6", -8.7252, 1.7951, 0.61547, "matManivela6", -8.7069, 1.4967, 1.2762),
         Door("matGabinete8", -7.7657, 0.26301, 1.079, "matManivela8", -7.3133, 0.091964, 1.0919, -1.0),
         Door("matGabinete7", -6.7669, 0.26301, 1.079, "matManivela7", -7.2203, 0.091964, 1.0919),
         Door("matGabinete", -8.7261, 2.026, 4.0371, "matManivela2", -8.7132, 1.9285, 3.5848, -1.0),
-        
-
     ]
+    
+    for door in doors:
+        is_safe_door = (door.mat == "matManiCaja")
+        setattr(door, 'is_safe', is_safe_door)
+        setattr(door, 'is_locked', is_safe_door)
+        
+        # Require key to open Door #7
+        if door.mat == "matPuerta6":
+            setattr(door, 'requires_key', True)
+            setattr(door, 'is_locked', True)
+            
+    return doors
+
+#Notas
+
+#Nota 1: La casa estuvo abandonada mucho tiempo, como alguien podría vivir en condiciones tan precarias como estas, a menos que, la vida sea lo último que tenga un valor aquí.
+
+#Nota 2: DollMaker suele ver su reloj 4 veces cuando esta torturando a sus víctimas, un hombre obsesionado con el tiempo nunca vive en paz.
+
+#Nota 3: Podrías probar a ingresar los números en orden ascendente.
+
+#Nota 4: El tiempo es un asesino silencioso, quizás esta vez te ayude capturar a uno.
+
+#Nota 5: Me levanté temprano hoy, desayuné muy tranquilamente sabiendo que le di la eternidad y belleza de una muñeca a todas ellas.
+
+#Nota 6: Al principio suelen ser ruidosas, pero una vez que se dan cuenta de que les hice un favor dejan de quejarse. Supongo que es parte de compartirme su felicidad.
+
 
 
 def build_door_material_set(setting_doors):
@@ -242,7 +267,10 @@ def build_door_material_set(setting_doors):
         door_materials.add(door.mat_perilla)
     return door_materials
 
+# List of the objects that we are inspectables
+#Thi shit is so important
 
+# NEW: Extract the material names of the objects for exclusion.
 def build_inspectable_material_set(setting_inspectables):
     inspectable_materials = set()
     for obj in setting_inspectables:
@@ -250,7 +278,7 @@ def build_inspectable_material_set(setting_inspectables):
             inspectable_materials.add(mat)
     return inspectable_materials
 
-
+# List of interactive objects that can be inspected.
 def create_inspectables():
     from inspect_obj import InspectableObject
     return [
@@ -263,25 +291,31 @@ def create_inspectables():
         InspectableObject("matNotaE", -9.0343, 1.7336, 2.4406),
         InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
         InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
+        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name=""),
         
-        # Machete instance using multiple Blender materials mapping keys
-        InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name="Machete")
+        # Add the Safe Key as an interactive object located inside the safe coordinates
+        InspectableObject(["matLlave", "matPllave"], -6.2983, 0.90647, -0.60902, name="Key")
     ]
 
 
 def load_scene_assets():
+    # 1. Load static configuration
     visual_config = create_visual_config()
     setting_doors = create_doors()
     door_materials = build_door_material_set(setting_doors)
     
+    # 2. Load inspectable objects configuration
     setting_inspectables = create_inspectables()
     inspectable_materials = build_inspectable_material_set(setting_inspectables)
     
+    # 3. Merge all dynamic materials to tell Model3D to separate them
     all_dynamic_materials = door_materials.copy()
     all_dynamic_materials.update(inspectable_materials)
     
+    # 4. Load the house
     house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=all_dynamic_materials)
     
+    # 5. RETURN THE EXACT 6 VALUES EXPECTED BY MAIN.PY
     return house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials
 
 
@@ -306,9 +340,11 @@ def draw_static_model(house, visual_config, door_materials, inspectable_material
     glPushMatrix()
 
     for material_name in house.materiales.keys():
+        # 1. Ignore dynamic doors
         if material_name in door_materials:
             continue
             
+        # 2. Ignore inspectable objects so they don't stick to tables
         if inspectable_materials and material_name in inspectable_materials:
             continue
 
@@ -334,12 +370,14 @@ def draw_doors(setting_doors, house, visual_config):
 def draw_inspectables_world(setting_inspectables, inspected_object, house, visual_config, looked_obj=None):
     for obj in setting_inspectables:
         if obj != inspected_object:
+            # Calculate if we are looking the object
             is_highlighted = (obj == looked_obj)
             obj.draw_world(house, visual_config, is_highlighted)
 
 
 def draw_inspected_hud(inspected_object, house, visual_config):
     if inspected_object:
+        # we gotta clear the depth buufer so the obj doesn't go through the walls 
         glClear(GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         inspected_object.draw_hud(house, visual_config)
@@ -375,6 +413,7 @@ def ray_intersects_triangle(ray_origin, ray_vector, tri):
 
 
 def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
+    #use the ray to know what door we are looking at
     ray_origin = glm.vec3(camera.pos_x, camera.pos_y, camera.pos_z)
     ray_dir = glm.vec3(camera.front_x, camera.front_y, camera.front_z)
     
@@ -400,21 +439,32 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
 
 
 # CLEAN UNIFICATION: Removed duplicated simple proximity function to preserve precise Raycast logic exclusively
-def toggle_nearest_visible_door(setting_doors, house, camera, audio=None, max_distance=2.5):
-    """
-    Opens or closes the door only if the detective is looking directly at its geometry triangles.
-    Fires localized open/close SFX triggers using the provided AudioManager instance.
-    """
+def toggle_nearest_visible_door(setting_doors, house, camera, audio, safe_ui, max_distance=2.5):
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
+        # Evaluate safe interaction
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            if getattr(target_door, 'is_locked', True):
+                safe_ui.active = True
+                return
+                
+        # Evaluate key requirement
+        if getattr(target_door, 'requires_key', False):
+            if not getattr(camera, 'has_key', False):
+                # (Opcional) Si en el futuro tienes sonido de puerta bloqueada: audio.play_sfx("locked")
+                return # Block opening if key is missing
+            else:
+                setattr(target_door, 'requires_key', False) # Unlock the door permanently
+                
+        # Open or close the door
         target_door.toggle()
         
-        # ACOUSTIC FEEDBACK BRIDGE: Execute sound effects depending on state
-        if audio:
-            if getattr(target_door, 'is_open', False):
-                audio.play_sfx("door_open")
-            else:
-                audio.play_sfx("door_close")
-        return True
+        # Play the corresponding sound effect
+        if getattr(target_door, 'is_open', False):
+            audio.play_sfx("door_open")
+        else:
+            audio.play_sfx("door_close")
         
-    return False
+        # Auto-lock the safe when closed again
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            target_door.is_locked = True
