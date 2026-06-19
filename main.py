@@ -1,6 +1,7 @@
 import os
 import json
 import pygame
+import random
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -339,6 +340,55 @@ def setup_fog():
     glFogfv(GL_FOG_COLOR, fog_color)
     glHint(GL_FOG_HINT, GL_NICEST)
 
+
+def setup_advanced_lighting():
+    glEnable(GL_LIGHTING)
+    glEnable(GL_COLOR_MATERIAL)
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+    glShadeModel(GL_SMOOTH)
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.15, 0.15, 0.15, 1.0])
+    
+  
+    # Lamp1
+    
+    glEnable(GL_LIGHT0)
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 0.9, 0.8, 1.0]) 
+    glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+    
+    # NUEVO: Atenuación agresiva para que no traspase la pared
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.22)      
+    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.20)   
+
+    
+    #Lamp2
+   
+    glEnable(GL_LIGHT1)
+    
+    dim_diffuse = [0.2, 0.10, 0.12, 1.0]
+    dim_specular = [0.3, 0.3, 0.3, 1.0]
+    
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, dim_diffuse) 
+    glLightfv(GL_LIGHT1, GL_SPECULAR, dim_specular)
+    
+    # NUEVO: Atenuación agresiva
+    glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.22)
+    glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.20)
+
+   
+    # Lamp3
+  
+    glEnable(GL_LIGHT2)
+    glLightfv(GL_LIGHT2, GL_SPECULAR, [0.5, 0.5, 0.5, 1.0])
+    
+    # NUEVO: Atenuación agresiva
+    glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.22)
+    glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.20)
+    
+ 
+
 def setup_display():
     
     os.environ['SDL_VIDEO_CENTERED'] = "mouse"
@@ -541,12 +591,40 @@ def render_frame(menu, camera, skybox, house, visual_config, setting_doors, door
             camera.front_x, camera.front_y, camera.front_z,
             0.0, 1.0, 0.0,
         )
+  
+        glDisable(GL_LIGHTING) 
         skybox.draw()
 
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_FOG)
-
+        glEnable(GL_LIGHTING)
         camera.update_view()
+        
+        #lamps
+        
+        # Lamp
+        lamp_position_1 = [-0.351, 2.6602, 2.1109, 1.0] 
+        glLightfv(GL_LIGHT0, GL_POSITION, lamp_position_1)
+        
+        #lamp2
+        lamp_position_2 = [-6.6994, 2.6715, 2.1109, 1.0] 
+        glLightfv(GL_LIGHT1, GL_POSITION, lamp_position_2)
+
+        # Lamp3
+        #if random.random() < 0.15: 
+            #intensity = random.uniform(0.0, 0.1) 
+        #else:
+            #intensity = random.uniform(0.6, 0.9) 
+            
+        #Intensity
+        #flicker_color = [intensity, intensity * 0.5, intensity * 0.5, 1.0]
+        #glLightfv(GL_LIGHT2, GL_DIFFUSE, flicker_color)
+        
+        lamp_position_3 = [2.8231, -0.031169, -2.6032, 1.0]
+        glLightfv(GL_LIGHT2, GL_POSITION, lamp_position_3)
+
+        
+
         update_doors(setting_doors, dt)
 
         # Determine notifications
@@ -657,6 +735,7 @@ def main():
 
     glEnable(GL_DEPTH_TEST)
     setup_fog()
+    setup_advanced_lighting() # <--- ACTIVA LAS LUCES AQUÍ
     
     pygame.event.set_blocked(None)
 
