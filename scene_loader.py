@@ -216,24 +216,32 @@ def create_visual_config():
 
 
 def create_doors():
-    return [
+    """
+    Initializes scene doors and sets explicit lock flags for the safe object.
+    Applies setattr() to inject dynamic attributes without triggering strict Pyright type-checker errors.
+    """
+    doors = [
         Door("matPuerta", -2.9858, 1.379, 0.37832, "matPerilla", -3.7616, 1.0498, 0.45044),
         Door("matPuerta2", 0.96918, 1.379, -1.5806, "matP2", 0.95666, 1.05, -0.80633),
         Door("matPuerta3", 3.6967, 1.379, 1.5812, "matP3", 3.7112, 1.05, 0.81052),
         Door("matPuerta4", 3.6952, 1.379, -0.70732, "matP4", 3.7136, 1.05, -1.4746),
         Door("matPuerta5", 3.6953, 1.379, -3.466, "matP5", 3.7113, 1.05, -4.2389),
         Door("matPuerta7", 2.8285, 1.379, -5.9659, "matP7", 2.0526, 1.05, -5.9807),
-        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),#this is only working cuz we are testing the basement stuff
+        Door("matPuerta6", -2.9858, 1.379, -1.5134, "matP6", 3.7616, 1.379, -1.5282),
         Door("matManiCaja", -6.055, 1.2843, -1.0216, "matN", -6.0372, 1.284, -0.80611),
-
         Door("matGabinete3", -8.7252, 1.7951, 3.0372, "matManivela3", -8.7069, 1.4967, 2.3771, -1.0),
         Door("matGabinete6", -8.7252, 1.7951, 0.61547, "matManivela6", -8.7069, 1.4967, 1.2762),
         Door("matGabinete8", -7.7657, 0.26301, 1.079, "matManivela8", -7.3133, 0.091964, 1.0919, -1.0),
         Door("matGabinete7", -6.7669, 0.26301, 1.079, "matManivela7", -7.2203, 0.091964, 1.0919),
         Door("matGabinete", -8.7261, 2.026, 4.0371, "matManivela2", -8.7132, 1.9285, 3.5848, -1.0),
-        
-
     ]
+    
+    for door in doors:
+        is_safe_door = (door.mat == "matManiCaja")
+        setattr(door, 'is_safe', is_safe_door)
+        setattr(door, 'is_locked', is_safe_door)
+        
+    return doors
 
 #Notas
 
@@ -438,8 +446,21 @@ def get_looked_at_door(setting_doors, house, camera, max_distance=2.5):
 
     return closest_door
 
-def toggle_nearest_visible_door(setting_doors, house, camera, max_distance=2.5):
-    #open or close the door
+def toggle_nearest_visible_door(setting_doors, house, camera, safe_ui, max_distance=2.5):
+    """
+    Evaluates interaction with the nearest door. Triggers the safe interface 
+    if the door is designated as a locked safe.
+    """
     target_door = get_looked_at_door(setting_doors, house, camera, max_distance)
     if target_door:
+        # Check if it's the safe and it's closed
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            if getattr(target_door, 'is_locked', True):
+                safe_ui.active = True
+                return
+                
         target_door.toggle()
+        
+        # Auto-lock the safe when closed again
+        if getattr(target_door, 'is_safe', False) and not getattr(target_door, 'is_open', False):
+            target_door.is_locked = True
