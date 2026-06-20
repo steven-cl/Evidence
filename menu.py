@@ -1,22 +1,44 @@
 import pygame
+import os
+import json
 from OpenGL.GL import *
+
+def load_language():
+    lang_code = "en"
+    if os.path.exists("settings.json"):
+        try:
+            with open("settings.json", "r") as f:
+                lang_code = json.load(f).get("language", "en")
+        except: pass
+    try:
+        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {}
+
+LANG = load_language()
 
 class MainMenu:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        
         self.state = 'MENU' 
-        
-        self.options = ["Begin Investigation", "Field Adjustments", "Case Credits", "Archive Case"]
         self.selected_index = 0
         
         self.volume = 80       
         self.is_fullscreen = False
         self.options_selection = 0
-        self.options_fields = ["Volume", "Display", "Return to Case File"]
+        
+        self.language = "en"
+        if os.path.exists("settings.json"):
+            try:
+                with open("settings.json", "r") as f:
+                    self.language = json.load(f).get("language", "en")
+            except: pass
+            
+        self.language_changed = False
+        self.refresh_texts()
 
-        self.game_over_options = ["Restart Investigation", "Archive Case"]
         self.game_over_selection = 0
 
         pygame.font.init()
@@ -35,13 +57,39 @@ class MainMenu:
         self.center_y = self.height // 2
         self.options_start_y = self.center_y + 20
         self.option_spacing = 50
-        
         self.hitboxes = []
+
+    def refresh_texts(self):
+        """Rebuild options if language changes"""
+        self.options = [
+            LANG.get("menu_opt_begin", "Begin Investigation"), 
+            LANG.get("menu_opt_adjust", "Field Adjustments"), 
+            LANG.get("menu_opt_credits", "Case Credits"), 
+            LANG.get("menu_opt_archive", "Archive Case")
+        ]
+        self.game_over_options = [
+            LANG.get("menu_go_opt_restart", "Restart Investigation"), 
+            LANG.get("menu_opt_archive", "Archive Case")
+        ]
+
+    def _get_options_fields(self):
+        disp_str = LANG.get("menu_adj_disp_full", "Full Screen") if self.is_fullscreen else LANG.get("menu_adj_disp_win", "Windowed")
+        vol_str = LANG.get("menu_adj_vol", "Audio Volume:  {vol}%").replace("{vol}", str(self.volume))
+        disp_field = LANG.get("menu_adj_disp", "Display:       {disp}").replace("{disp}", disp_str)
+        
+        lang_val = LANG.get("lang_en", "English") if self.language == "en" else LANG.get("lang_es", "Spanish")
+        lang_field = LANG.get("menu_adj_lang", "Language:      {lang}").replace("{lang}", lang_val)
+
+        return [
+            vol_str,
+            disp_field,
+            lang_field,
+            LANG.get("menu_adj_return", "Return to Case File")
+        ]
 
     def handle_input(self, event, camera=None, audio=None):
         if event.type == pygame.MOUSEMOTION:
             mouse_x, mouse_y = pygame.mouse.get_pos()
-            
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU':
@@ -58,7 +106,7 @@ class MainMenu:
                             if audio: audio.play_sfx("ui_click")
                     
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            # Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
             mouse_x, mouse_y = pygame.mouse.get_pos()
             
             if self.state == 'CREDITS' and event.button == 1:
@@ -83,7 +131,7 @@ class MainMenu:
                             
                     elif self.state == 'OPTIONS':
                         self.options_selection = idx 
-                        if self.options_selection == 2 and event.button == 1: 
+                        if self.options_selection == 3 and event.button == 1: 
                             if audio: audio.play_sfx("ui_click")
                             self.state = 'MENU'
                         elif event.button == 1: 
@@ -108,11 +156,12 @@ class MainMenu:
                     self.state = 'QUIT'
                     
             elif self.state == 'OPTIONS':
+                current_fields_len = len(self._get_options_fields())
                 if event.key == pygame.K_UP:
-                    self.options_selection = (self.options_selection - 1) % len(self.options_fields)
+                    self.options_selection = (self.options_selection - 1) % current_fields_len
                     if audio: audio.play_sfx("ui_click")
                 elif event.key == pygame.K_DOWN:
-                    self.options_selection = (self.options_selection + 1) % len(self.options_fields)
+                    self.options_selection = (self.options_selection + 1) % current_fields_len
                     if audio: audio.play_sfx("ui_click")
                 elif event.key == pygame.K_LEFT:
                     if audio: audio.play_sfx("ui_click")
@@ -120,7 +169,7 @@ class MainMenu:
                 elif event.key == pygame.K_RIGHT:
                     if audio: audio.play_sfx("ui_click")
                     self.adjust_option(1, camera)
-                elif event.key == pygame.K_RETURN and self.options_selection == 2:
+                elif event.key == pygame.K_RETURN and self.options_selection == 3:
                     if audio: audio.play_sfx("ui_click")
                     self.state = 'MENU'
                 elif event.key == pygame.K_ESCAPE:
@@ -166,6 +215,19 @@ class MainMenu:
             self.is_fullscreen = not self.is_fullscreen
             if camera: 
                 self.apply_display_mode(camera)
+        elif self.options_selection == 2: 
+            # --- HOT RELOAD LOGIC ---
+            self.language = "es" if self.language == "en" else "en"
+            global LANG
+            try:
+                with open(f"source/locales/{self.language}.json", "r", encoding="utf-8") as f:
+                    new_lang = json.load(f)
+                    LANG.clear()
+                    LANG.update(new_lang)
+            except: pass
+            
+            self.refresh_texts()
+            self.language_changed = True
 
     def apply_display_mode(self, camera):
         pygame.display.toggle_fullscreen()
@@ -243,8 +305,8 @@ class MainMenu:
         glPopMatrix()
 
     def _render_main_menu(self):
-        self.draw_text_gl(self.center_x, self.center_y - 120, "E V I D E N C E", self.font_title, (139, 0, 0))
-        self.draw_text_gl(self.center_x, self.center_y - 60, "Resolve the Mystery", self.font_slogan, (200, 200, 200))
+        self.draw_text_gl(self.center_x, self.center_y - 120, LANG.get("menu_title", "E V I D E N C E"), self.font_title, (139, 0, 0))
+        self.draw_text_gl(self.center_x, self.center_y - 60, LANG.get("menu_slogan", "Resolve the Mystery"), self.font_slogan, (200, 200, 200))
         for i, option in enumerate(self.options):
             y_pos = self.options_start_y + (i * self.option_spacing)
             if i == self.selected_index:
@@ -257,13 +319,8 @@ class MainMenu:
             self.hitboxes.append(rect)
 
     def _render_options_menu(self):
-        self.draw_text_gl(self.center_x, self.center_y - 120, "FIELD ADJUSTMENTS", self.font_title, (139, 0, 0))
-        display_str = "Full Screen" if self.is_fullscreen else "Windowed"
-        opt_text = [
-            f"Audio Volume:  {self.volume}%",
-            f"Display:       {display_str}",
-            "Return to Case File"
-        ]
+        self.draw_text_gl(self.center_x, self.center_y - 120, LANG.get("menu_adj_title", "FIELD ADJUSTMENTS"), self.font_title, (139, 0, 0))
+        opt_text = self._get_options_fields()
         for i, text in enumerate(opt_text):
             y_pos = self.options_start_y + (i * self.option_spacing)
             if i == self.options_selection:
@@ -277,65 +334,51 @@ class MainMenu:
 
     def _render_credits(self):
         y_offset = self.center_y - 260
-        
-        self.draw_text_gl(self.center_x, y_offset, "E V I D E N C E", self.font_title, (139, 0, 0))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_title", "E V I D E N C E"), self.font_title, (139, 0, 0))
         y_offset += 45
-        self.draw_text_gl(self.center_x, y_offset, "Resolve the Mystery", self.font_slogan, (200, 200, 200))
-        
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_slogan", "Resolve the Mystery"), self.font_slogan, (200, 200, 200))
         y_offset += 60
-        
-        self.draw_text_gl(self.center_x, y_offset, "LEAD 3D ENVIRONMENT ARTIST & MODELER", self.font_narrative, (180, 0, 0))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_role_3d", "LEAD 3D ENVIRONMENT ARTIST & MODELER"), self.font_narrative, (180, 0, 0))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios", self.font_narrative, (200, 200, 200))
-        
         y_offset += 40
-        
-        self.draw_text_gl(self.center_x, y_offset, "CORE PROGRAMMING & MECHANICS", self.font_narrative, (180, 0, 0))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_role_core", "CORE PROGRAMMING & MECHANICS"), self.font_narrative, (180, 0, 0))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Steven Castillo Lopez (@steven-cl)", self.font_narrative, (200, 200, 200))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Manuel Ortega (@maox51)", self.font_narrative, (200, 200, 200))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios (@justBtterThanU)", self.font_narrative, (200, 200, 200))
-        
         y_offset += 40
-        
-        self.draw_text_gl(self.center_x, y_offset, "GAME DESIGN & NARRATIVE", self.font_narrative, (180, 0, 0))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_role_design", "GAME DESIGN & NARRATIVE"), self.font_narrative, (180, 0, 0))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Steven Castillo Lopez", self.font_narrative, (200, 200, 200))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Manuel Ortega", self.font_narrative, (200, 200, 200))
         y_offset += 25
         self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios", self.font_narrative, (200, 200, 200))
-        
         y_offset += 40
-        
-        self.draw_text_gl(self.center_x, y_offset, "SOUND DESIGN & ASSETS", self.font_narrative, (180, 0, 0))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_role_sound", "SOUND DESIGN & ASSETS"), self.font_narrative, (180, 0, 0))
         y_offset += 25
-        self.draw_text_gl(self.center_x, y_offset, "Community Open Source & Self Created", self.font_narrative, (200, 200, 200))
-        
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_sound_val", "Community Open Source & Self Created"), self.font_narrative, (200, 200, 200))
         y_offset += 60
-        
-        self.draw_text_gl(self.center_x, y_offset, "> Press [ESC] to Return <", self.font_options, (110, 110, 110))
+        self.draw_text_gl(self.center_x, y_offset, LANG.get("menu_cred_return", "> Press [ESC] to Return <"), self.font_options, (110, 110, 110))
 
     def _render_game_over(self):
-        self.draw_text_gl(self.center_x, self.center_y - 180, "Y O U   L O S E", self.font_title, (180, 0, 0))
-        
+        self.draw_text_gl(self.center_x, self.center_y - 180, LANG.get("menu_go_title", "Y O U   L O S E"), self.font_title, (180, 0, 0))
         story_lines = [
-            "The serial killer returned home and found you inside.",
-            "He entered, massacred you, and tore you to pieces.",
-            "You became just another one of his victims,",
-            "and nobody ever heard from you again.",
-            "",
-            "For Freddy, you were his favorite toy because you dared",
-            "to take the risk of entering his house to investigate him."
+            LANG.get("menu_go_story_1", "The serial killer returned home and found you inside."),
+            LANG.get("menu_go_story_2", "He entered, massacred you, and tore you to pieces."),
+            LANG.get("menu_go_story_3", "You became just another one of his victims,"),
+            LANG.get("menu_go_story_4", "and nobody ever heard from you again."),
+            LANG.get("menu_go_story_5", ""),
+            LANG.get("menu_go_story_6", "For Freddy, you were his favorite toy because you dared"),
+            LANG.get("menu_go_story_7", "to take the risk of entering his house to investigate him.")
         ]
-        
         y_offset = self.center_y - 110
         for line in story_lines:
             self.draw_text_gl(self.center_x, y_offset, line, self.font_narrative, (170, 170, 170))
             y_offset += 25
-        
         options_y = y_offset + 30
         for i, option in enumerate(self.game_over_options):
             y_pos = options_y + (i * self.option_spacing)

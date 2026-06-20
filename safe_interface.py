@@ -1,6 +1,24 @@
 import pygame # pyright: ignore[reportMissingImports]
 from OpenGL.GL import * # pyright: ignore[reportMissingImports]
 import os
+import json
+
+# =============================================================================
+# --- INTERNATIONALIZATION (i18n) SYSTEM ---
+# =============================================================================
+
+def load_language(lang_code="en"):
+    """
+    Loads the text dictionary from the specified JSON locale file.
+    """
+    try:
+        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading language {lang_code}: {e}")
+        return {}
+
+LANG = load_language("en")
 
 class SafeInterface:
     def __init__(self):
@@ -320,17 +338,17 @@ class SafeInterface:
         # 6. Render Text on Digital LCD Screen
         text_y_center = disp_y + (disp_h / 2) - 18
         if self.error_timer > 0:
-            self.draw_text("ERROR", disp_x + 15, text_y_center, self.font, (255, 50, 50))
+            self.draw_text(LANG.get("safe_error", "ERROR"), disp_x + 15, text_y_center, self.font, (255, 50, 50))
         elif len(self.input_buffer) > 0:
             # Show only the last 8 characters so it scrolls left like a real calculator
-            display_str = self.input_buffer[-8:]
-            self.draw_text(display_str, disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Pure Bright Green
+            display_str = self.input_buffer[-10:]
+            self.draw_text(display_str, disp_x + 15, text_y_center, self.font, (0, 255, 0)) 
         else:
             # Idle cursor
-            self.draw_text("_", disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Same pure bright green
+            self.draw_text("_", disp_x + 15, text_y_center, self.font, (0, 255, 0)) 
 
         # Instructions
-        self.draw_text("Press [ESC] to Exit", 25, 25, self.font_small, (200, 200, 200)) # This will no longer disappear
+        self.draw_text(LANG.get("safe_exit", "Press [ESC] to Exit"), 25, 25, self.font_small, (200, 200, 200)) 
         
         glEnable(GL_FOG)
         glEnable(GL_DEPTH_TEST)
@@ -338,3 +356,8 @@ class SafeInterface:
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
+        
+    def update_language(self, new_lang_dict):
+        global LANG
+        LANG.clear()
+        LANG.update(new_lang_dict)

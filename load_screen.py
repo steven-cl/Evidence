@@ -1,6 +1,27 @@
 import pygame
 import time
+import json
+import os
 from OpenGL.GL import *
+
+# =============================================================================
+# --- INTERNATIONALIZATION (i18n) SYSTEM ---
+# =============================================================================
+
+def load_language():
+    lang_code = "en"
+    if os.path.exists("settings.json"):
+        try:
+            with open("settings.json", "r") as f:
+                lang_code = json.load(f).get("language", "en")
+        except: pass
+    try:
+        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {}
+
+LANG = load_language()
 
 _font_title = None
 _font_slogan = None
@@ -92,8 +113,8 @@ def render_loading_screen(width, height, duration=1.5, start_progress=0.0, targe
         center_x = width // 2
         center_y = height // 2
         
-        draw_text_gl(center_x, center_y - 110, "E V I D E N C E", _font_title, (180, 20, 20))
-        draw_text_gl(center_x, center_y - 50, "Resolve the Mystery", _font_slogan, (200, 200, 200))
+        draw_text_gl(center_x, center_y - 110, LANG.get("load_title", "E V I D E N C E"), _font_title, (180, 20, 20))
+        draw_text_gl(center_x, center_y - 50, LANG.get("load_slogan", "Resolve the Mystery"), _font_slogan, (200, 200, 200))
         
         bar_width = 400
         bar_height = 14
