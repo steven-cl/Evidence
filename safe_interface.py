@@ -2,6 +2,14 @@ import pygame # pyright: ignore[reportMissingImports]
 from OpenGL.GL import * # pyright: ignore[reportMissingImports]
 import os
 import json
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # =============================================================================
 # --- INTERNATIONALIZATION (i18n) SYSTEM ---
@@ -12,7 +20,7 @@ def load_language(lang_code="en"):
     Loads the text dictionary from the specified JSON locale file.
     """
     try:
-        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+        with open(resource_path(f"source/locales/{lang_code}.json"), "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading language {lang_code}: {e}")
@@ -34,7 +42,7 @@ class SafeInterface:
         self.flash_timer = 0.0
         self.flashing_key = None
         
-        self.texture_id = self.load_texture("source/interfaces/caja.jpg")
+        self.texture_id = self.load_texture(resource_path("source/interfaces/caja.jpg"))
         
         # Grid keys bounding boxes (X, Y, Width, Height)
         self.key_rects = {

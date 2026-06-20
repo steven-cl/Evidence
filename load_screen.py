@@ -3,6 +3,24 @@ import time
 import json
 import os
 from OpenGL.GL import *
+import sys
+
+def get_user_data_path(filename):
+    if sys.platform == "win32":
+        app_data = os.getenv("APPDATA")
+        folder = os.path.join(app_data, "Evidence")
+    else:
+        folder = os.path.expanduser("~/.evidence")
+
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, filename)
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # =============================================================================
 # --- INTERNATIONALIZATION (i18n) SYSTEM ---
@@ -10,13 +28,13 @@ from OpenGL.GL import *
 
 def load_language():
     lang_code = "en"
-    if os.path.exists("settings.json"):
+    if os.path.exists(get_user_data_path("settings.json")):
         try:
-            with open("settings.json", "r") as f:
+            with open(get_user_data_path("settings.json"), "r") as f:
                 lang_code = json.load(f).get("language", "en")
         except: pass
     try:
-        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+        with open(resource_path(f"source/locales/{lang_code}.json"), "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         return {}

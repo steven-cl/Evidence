@@ -3,7 +3,15 @@ import pywavefront
 import glm
 import pygame
 import os
+import sys
 from OpenGL.GL import *
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def load_texture(image_path):
     try:
@@ -65,7 +73,7 @@ class Model3D:
         self.global_texture_id = None
         if texture_filename:
             tex_path = os.path.join("source", "textures", texture_filename)
-            self.global_texture_id = load_texture(tex_path)
+            self.global_texture_id = load_texture(resource_path(tex_path))
             
         for name, material in self.scene.materials.items():
             if not material.vertices:
@@ -104,7 +112,7 @@ class Model3D:
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
             FURNITURE_KEYWORDS = [
                 "lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno",
-                "basec", "colchon", "almohada", "sillo", "cojin", "pilar",
+                "basec", "colchon", "almohada", "sillo", "cojin",
                 "limite", "hueso", "organos", "detalles", "machete",
                 "mangomachete", "cadaver", "cuerpop", "cruz", "head", "hands", "hair"
             ]
@@ -179,10 +187,10 @@ class Model3D:
             if is_ignored_prop:
                 continue
 
-            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stair"]
+            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stair","pilar"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
 
-            INVERTIR_NORMALES = ["matpsotano", "psotano"]
+            INVERTIR_NORMALES = ["matpsotano", "psotano", "pilar"]
             DOBLE_CARA = ["stair"]
 
             for i in range(0, len(v), stride * 3):

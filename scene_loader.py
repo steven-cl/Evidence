@@ -3,6 +3,15 @@ from obj_loader import Model3D
 from pared import Texture
 from door_In import Door
 import glm
+import os
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 
 def create_visual_config():
@@ -315,7 +324,7 @@ def load_scene_assets():
     all_dynamic_materials.update(inspectable_materials)
     
     # 4. Load the house
-    house = Model3D('source/models/RenewHouse.obj', scale=1.0, door_materials=all_dynamic_materials)
+    house = Model3D(resource_path('source/models/RenewHouse.obj'), scale=1.0, door_materials=all_dynamic_materials)
     
     # 5. RETURN THE EXACT 6 VALUES EXPECTED BY MAIN.PY
     return house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials

@@ -1,13 +1,12 @@
 import os
+import sys
 import json
-from time import sleep
 import pygame
 import math
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from audio_manager import AudioManager
-import glm   
 
 # Import internal gameplay modules
 from menu import MainMenu
@@ -25,24 +24,47 @@ from scene_loader import (
     draw_doors,
     draw_inspectables_world,
     draw_inspected_hud,
-    ray_intersects_triangle
 )
+
+def get_user_data_path(filename):
+    if sys.platform == "win32":
+        app_data = os.getenv('APPDATA')
+        folder = os.path.join(app_data, "Evidence")
+    else:
+        folder = os.path.expanduser("~/.evidence")
+    
+    if not os.path.exists(folder):
+        os.makedirs(folder, exist_ok=True)
+        
+    return os.path.join(folder, filename)
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # =============================================================================
 # --- INTERNATIONALIZATION (i18n) SYSTEM ---
 # =============================================================================
 
 def load_language():
+    path = get_user_data_path("settings.json")
     lang_code = "en"
-    if os.path.exists("settings.json"):
+    
+    if os.path.exists(path):
         try:
-            with open("settings.json", "r") as f:
+            with open(path, "r") as f:
                 lang_code = json.load(f).get("language", "en")
-        except: pass
+        except Exception as e:
+            print(f"Error reading settings for language: {e}")
+            
     try:
-        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+        with open(resource_path(f"source/locales/{lang_code}.json"), "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
+        print(f"Error loading language file {lang_code}: {e}")
         return {}
 
 LANG = load_language()
@@ -59,30 +81,20 @@ TUTORIAL_TEXTS = [
 SETTINGS_FILE = "settings.json"
 
 def load_settings():
-    """
-    Loads previous settings from a JSON file. 
-    If no file is found, returns default fallback values.
-    """
+    path = get_user_data_path("settings.json")
     default_settings = {
-        "width": 0,          
-        "height": 0,
-        "is_fullscreen": False,
-        "volume": 80,
-        "language": "en"
+        "width": 0, "height": 0, "is_fullscreen": False, "volume": 80, "language": "en"
     }
-    if os.path.exists(SETTINGS_FILE):
+    if os.path.exists(path):
         try:
-            with open(SETTINGS_FILE, "r") as f:
+            with open(path, "r") as f:
                 return json.load(f)
         except:
             pass
     return default_settings
 
 def save_settings(camera, menu):
-    """
-    Saves the exact state of the window resolution and menu configuration 
-    to a JSON file before application exit to ensure persistence across sessions.
-    """
+    path = get_user_data_path("settings.json")
     settings = {
         "width": camera.width,
         "height": camera.height,
@@ -91,7 +103,7 @@ def save_settings(camera, menu):
         "language": getattr(menu, 'language', 'en')
     }
     try:
-        with open(SETTINGS_FILE, "w") as f:
+        with open(path, "w") as f:
             json.dump(settings, f)
     except Exception as e:
         print(f"Error saving settings: {e}")
@@ -1020,7 +1032,12 @@ def main():
     audio.play_ambient_music("menu.mp3", loops=-1)
     
     # UI Component Registration
+    saved_settings = load_settings()
+    
     menu = MainMenu(screen_width, screen_height)
+    menu.volume = saved_settings["volume"]
+    menu.language = saved_settings["language"]
+    menu.is_fullscreen = saved_settings["is_fullscreen"]
     safe_ui = SafeInterface() 
     portfolio_ui = PortfolioInterface()
     
@@ -1080,7 +1097,7 @@ def main():
         if getattr(menu, 'language_changed', False):
             lang_code = getattr(menu, 'language', 'en')
             try:
-                with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+                with open(resource_path(f"source/locales/{lang_code}.json"), "r", encoding="utf-8") as f:
                     new_lang_dict = json.load(f)
             except Exception as e:
                 print(f"Error en hot-reload: {e}")

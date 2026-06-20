@@ -1,5 +1,14 @@
 from OpenGL.GL import *
 from PIL import Image
+import os
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class Texture:
     def __init__(self, filepath):
@@ -17,7 +26,7 @@ class Texture:
 
         try:
             # Load the image using Pillow
-            image = Image.open(filepath)
+            image = Image.open(resource_path(filepath))
             image = image.transpose(Image.FLIP_TOP_BOTTOM)
             img_data = image.convert("RGBA").tobytes()
             

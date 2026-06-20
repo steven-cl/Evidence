@@ -1,5 +1,14 @@
 from OpenGL.GL import *
 import pygame
+import os
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class Skybox:
     def __init__(self, texture_paths):
@@ -8,8 +17,13 @@ class Skybox:
 
     def load_texture_file(self, filename):
         """Loads an image with Pygame and transfers it to the GPU as a 2D texture"""
-        surface = pygame.image.load(filename)
-        # Flip the image vertically to align Pygame's coordinate system with OpenGL
+        full_path = resource_path(filename)
+        
+        if not os.path.exists(full_path):
+            print(f"Skybox error: File not found at {full_path}")
+            return None
+
+        surface = pygame.image.load(full_path)
         image_data = pygame.image.tostring(surface, "RGB", True)
         width, height = surface.get_width(), surface.get_height()
 
@@ -17,7 +31,6 @@ class Skybox:
         glBindTexture(GL_TEXTURE_2D, tex_id)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data)
 
-        # Configure filters to prevent visual seams at the edges of the cube
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)

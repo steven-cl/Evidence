@@ -2,6 +2,14 @@ import pygame # pyright: ignore[reportMissingImports]
 from OpenGL.GL import * # pyright: ignore[reportMissingImports]
 import os
 import json
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # =============================================================================
 # --- INTERNATIONALIZATION (i18n) SYSTEM ---
@@ -12,7 +20,7 @@ def load_language(lang_code="en"):
     Loads the text dictionary from the specified JSON locale file.
     """
     try:
-        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+        with open(resource_path(f"source/locales/{lang_code}.json"), "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading language {lang_code}: {e}")
@@ -31,8 +39,8 @@ class PortfolioInterface:
         self.current_page = 0
         
         # Load both textures 
-        self.tex_portfolio, self.port_w, self.port_h = self.load_texture("source/interfaces/portfolio.png")
-        self.tex_note, self.note_w, self.note_h = self.load_texture("source/interfaces/nota.png")
+        self.tex_portfolio, self.port_w, self.port_h = self.load_texture(resource_path("source/interfaces/portfolio.png"))
+        self.tex_note, self.note_w, self.note_h = self.load_texture(resource_path("source/interfaces/nota.png"))
         
         # Hitboxes for interactive navigation
         self.left_btn_rect = None
