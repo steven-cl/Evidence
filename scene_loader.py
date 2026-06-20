@@ -163,6 +163,15 @@ def create_visual_config():
         "matCadaverC": Texture('source/textures/texture_sa.jpg'),
         "matCadaverD": Texture('source/textures/texture_sa.jpg'),
         "matCuerpoP": (0.62, 0.52, 0.42),
+        "matHeads": (0.62, 0.52, 0.42),
+        "matHeads2": (0.62, 0.52, 0.42),
+
+        "matHands": (0.62, 0.52, 0.42),
+        "matHands2": (0.62, 0.52, 0.42),
+
+        "matHair": (0.05, 0.05, 0.05),
+        "matHair2": (0.05, 0.05, 0.05),
+        "matBars": Texture('source/textures/texture_machete.jpg'),
         "matPie1": (0.62, 0.52, 0.42),
         "matPie2": (0.62, 0.52, 0.42),
         "matPie3": (0.62, 0.52, 0.42),
@@ -197,6 +206,9 @@ def create_visual_config():
         "matNotaE": Texture('source/textures/texture_nota.jpg'),
         "matNotaF": Texture('source/textures/texture_nota.jpg'),
         "matNota2": Texture('source/textures/texture_nota.jpg'),
+        "matDiary": Texture('source/textures/texture_nota.jpg'),
+        "matMess2": Texture('source/textures/texture_last.jpg'),
+        "matMess": Texture('source/textures/texture_last2.jpg'),
         "matPcaja": (0.45, 0.45, 0.45),
         "matPanel": Texture('source/textures/texture_caja.jpg'),
         "matN": Texture('source/textures/texture_caja.jpg'),
@@ -293,6 +305,7 @@ def create_inspectables():
         InspectableObject("matNotaE", -9.0343, 1.7336, 2.4406),
         InspectableObject("matNotaF", 7.3597, 0.47214, -0.55389),
         InspectableObject("matNota2", -7.022, 0.69689, 0.47165),
+        InspectableObject("matDiary", 19.775, 0.092446, 19.006),
         InspectableObject(["matMachete", "matMangoMachete"], 1.6192, -2.6512, -4.3964, name=""),
         
         # Add the Safe Key as an interactive object located inside the safe coordinates
@@ -325,8 +338,8 @@ def load_scene_assets():
 
 def apply_material(material_name, config_visual):
     # 1. LISTA DE MATERIALES LUMINOSOS
-    # Cambia "matBombillo" por el nombre exacto que tiene el material de tu lámpara en Blender
-    emissive_materials = ["matLA", "matLB", "matLC", "matLD", "matLE", "matLF", "matLG", "matLH","matLJ","matBright", "matIlu"] 
+    
+    emissive_materials = ["matLA", "matLB", "matLC", "matLD", "matLE", "matLF", "matLG", "matLH","matLJ","matBright", "matIlu","matDiary"] 
     
     # Si el material está en la lista, le decimos a OpenGL que brille con un color cálido
     if material_name in emissive_materials:

@@ -425,9 +425,9 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
     glEnable(GL_FOG)
 
 def setup_fog(density):
-    """
-    Configures global OpenGL exponential fog parameters to create an atmospheric mystery effect.
-    """
+    
+    #Configures global OpenGL exponential fog parameters to create an atmospheric mystery effect.
+    
     glEnable(GL_FOG)
     glFogi(GL_FOG_MODE, GL_EXP2)
     glFogf(GL_FOG_DENSITY, density)
@@ -456,13 +456,11 @@ def setup_advanced_lighting():
 
     # Lamp2
     glEnable(GL_LIGHT1)
-    dim_diffuse = [0.2, 0.10, 0.12, 1.0]
-    dim_specular = [0.3, 0.3, 0.3, 1.0]
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, dim_diffuse) 
-    glLightfv(GL_LIGHT1, GL_SPECULAR, dim_specular)
-    glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 1.0)
-    glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.22)
-    glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.20)
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 0.9, 0.8, 1.0]) 
+    glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.22)      
+    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.20) 
 
     # Lamp3
     glEnable(GL_LIGHT2)
@@ -470,6 +468,26 @@ def setup_advanced_lighting():
     glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 1.0)
     glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.22)
     glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.20)
+
+   
+    # PLAYER FLASHLIGHT (GL_LIGHT3)
+   
+    glEnable(GL_LIGHT3)
+    
+    # White, bright LED light
+    glLightfv(GL_LIGHT3, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0]) 
+    glLightfv(GL_LIGHT3, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+    
+    # Smooth attenuation so the beam travels far
+    glLightf(GL_LIGHT3, GL_CONSTANT_ATTENUATION, 1.0)
+    glLightf(GL_LIGHT3, GL_LINEAR_ATTENUATION, 0.05)
+    glLightf(GL_LIGHT3, GL_QUADRATIC_ATTENUATION, 0.01)
+
+    # SPOTLIGHT MATH
+    glLightf(GL_LIGHT3, GL_SPOT_CUTOFF, 15.0) 
+    
+    # Edge blur (Penumbra). Higher means softer edges
+    glLightf(GL_LIGHT3, GL_SPOT_EXPONENT, 20.0)
 
 def setup_display():
     os.environ['SDL_VIDEO_CENTERED'] = "mouse"
@@ -802,6 +820,23 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         # Lamp 3
         lamp_position_3 = [2.8231, -0.031169, -2.6032, 1.0]
         glLightfv(GL_LIGHT2, GL_POSITION, lamp_position_3)
+
+        # ==========================================
+        # 4. PLAYER FLASHLIGHT DYNAMICS (GL_LIGHT3)
+        # ==========================================
+        # Offset matemático: Retrocedemos la luz 0.5 unidades sobre tu vector de visión
+        offset = 0.5
+        flashlight_pos = [
+            camera.pos_x - (camera.front_x * offset), 
+            camera.pos_y - (camera.front_y * offset), 
+            camera.pos_z - (camera.front_z * offset), 
+            1.0
+        ]
+        glLightfv(GL_LIGHT3, GL_POSITION, flashlight_pos)
+
+        # La dirección sigue siendo la misma
+        flashlight_dir = [camera.front_x, camera.front_y, camera.front_z]
+        glLightfv(GL_LIGHT3, GL_SPOT_DIRECTION, flashlight_dir)
 
         update_doors(setting_doors, dt)
 
