@@ -8,16 +8,14 @@ class MainMenu:
         
         self.state = 'MENU' 
         
-        self.options = ["Begin Investigation", "Field Adjustments", "Archive Case"]
+        self.options = ["Begin Investigation", "Field Adjustments", "Case Credits", "Archive Case"]
         self.selected_index = 0
         
         self.volume = 80       
-        # Display mode state initialization
         self.is_fullscreen = False
         self.options_selection = 0
         self.options_fields = ["Volume", "Display", "Return to Case File"]
 
-        # Game Over state initialization
         self.game_over_options = ["Restart Investigation", "Archive Case"]
         self.game_over_selection = 0
 
@@ -26,7 +24,7 @@ class MainMenu:
             self.font_title = pygame.font.SysFont("Courier New", 48, bold=True)
             self.font_slogan = pygame.font.SysFont("Courier New", 16, italic=True)
             self.font_options = pygame.font.SysFont("Courier New", 28, bold=True)
-            self.font_narrative = pygame.font.SysFont("Courier New", 18, bold=False) # Font for the death story
+            self.font_narrative = pygame.font.SysFont("Courier New", 18, bold=False) 
         except:
             self.font_title = pygame.font.Font(None, 54)
             self.font_slogan = pygame.font.Font(None, 24)
@@ -42,7 +40,6 @@ class MainMenu:
 
     def handle_input(self, event, camera=None, audio=None):
         if event.type == pygame.MOUSEMOTION:
-            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
             mouse_x, mouse_y = pygame.mouse.get_pos()
             
             for idx, rect in enumerate(self.hitboxes):
@@ -64,6 +61,11 @@ class MainMenu:
             # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
             mouse_x, mouse_y = pygame.mouse.get_pos()
             
+            if self.state == 'CREDITS' and event.button == 1:
+                self.state = 'MENU'
+                if audio: audio.play_sfx("ui_click")
+                return
+
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU' and event.button == 1:
@@ -124,6 +126,11 @@ class MainMenu:
                 elif event.key == pygame.K_ESCAPE:
                     self.state = 'MENU'
                     
+            elif self.state == 'CREDITS':
+                if event.key in [pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE]:
+                    self.state = 'MENU'
+                    if audio: audio.play_sfx("ui_click")
+                    
             elif self.state == 'GAME_OVER':
                 if event.key == pygame.K_UP:
                     self.game_over_selection = (self.game_over_selection - 1) % len(self.game_over_options)
@@ -148,6 +155,8 @@ class MainMenu:
             self.state = 'OPTIONS'
             self.options_selection = 0
         elif self.selected_index == 2:
+            self.state = 'CREDITS'
+        elif self.selected_index == 3:
             self.state = 'QUIT'
 
     def adjust_option(self, direction, camera):
@@ -221,6 +230,8 @@ class MainMenu:
             self._render_main_menu()
         elif self.state == 'OPTIONS':
             self._render_options_menu()
+        elif self.state == 'CREDITS':
+            self._render_credits()
         elif self.state == 'GAME_OVER':
             self._render_game_over()
             
@@ -264,10 +275,52 @@ class MainMenu:
             rect = self.draw_text_gl(self.center_x, y_pos, display_text, self.font_options, color)
             self.hitboxes.append(rect)
 
+    def _render_credits(self):
+        y_offset = self.center_y - 260
+        
+        self.draw_text_gl(self.center_x, y_offset, "E V I D E N C E", self.font_title, (139, 0, 0))
+        y_offset += 45
+        self.draw_text_gl(self.center_x, y_offset, "Resolve the Mystery", self.font_slogan, (200, 200, 200))
+        
+        y_offset += 60
+        
+        self.draw_text_gl(self.center_x, y_offset, "LEAD 3D ENVIRONMENT ARTIST & MODELER", self.font_narrative, (180, 0, 0))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios", self.font_narrative, (200, 200, 200))
+        
+        y_offset += 40
+        
+        self.draw_text_gl(self.center_x, y_offset, "CORE PROGRAMMING & MECHANICS", self.font_narrative, (180, 0, 0))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Steven Castillo Lopez (@steven-cl)", self.font_narrative, (200, 200, 200))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Manuel Ortega (@maox51)", self.font_narrative, (200, 200, 200))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios (@justBtterThanU)", self.font_narrative, (200, 200, 200))
+        
+        y_offset += 40
+        
+        self.draw_text_gl(self.center_x, y_offset, "GAME DESIGN & NARRATIVE", self.font_narrative, (180, 0, 0))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Steven Castillo Lopez", self.font_narrative, (200, 200, 200))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Manuel Ortega", self.font_narrative, (200, 200, 200))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Osman Aaron Mejias Rios", self.font_narrative, (200, 200, 200))
+        
+        y_offset += 40
+        
+        self.draw_text_gl(self.center_x, y_offset, "SOUND DESIGN & ASSETS", self.font_narrative, (180, 0, 0))
+        y_offset += 25
+        self.draw_text_gl(self.center_x, y_offset, "Community Open Source & Self Created", self.font_narrative, (200, 200, 200))
+        
+        y_offset += 60
+        
+        self.draw_text_gl(self.center_x, y_offset, "> Press [ESC] to Return <", self.font_options, (110, 110, 110))
+
     def _render_game_over(self):
         self.draw_text_gl(self.center_x, self.center_y - 180, "Y O U   L O S E", self.font_title, (180, 0, 0))
         
-        # Narrative of death
         story_lines = [
             "The serial killer returned home and found you inside.",
             "He entered, massacred you, and tore you to pieces.",
@@ -283,7 +336,6 @@ class MainMenu:
             self.draw_text_gl(self.center_x, y_offset, line, self.font_narrative, (170, 170, 170))
             y_offset += 25
         
-        # Interactive Options
         options_y = y_offset + 30
         for i, option in enumerate(self.game_over_options):
             y_pos = options_y + (i * self.option_spacing)

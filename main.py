@@ -724,7 +724,7 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
             menu.center_y = event.h // 2
             menu.options_start_y = menu.center_y + 20
 
-        if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']:
+        if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER', 'CREDITS']:
             if menu.state == 'MENU' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 menu.state = 'GAME'
                 if audio: audio.play_sfx("ui_click")
@@ -775,7 +775,7 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
     glClearColor(0.25, 0.26, 0.30, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     
-    needs_mouse_visible = (menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']) or safe_ui.active or portfolio_ui.active
+    needs_mouse_visible = (menu.state in ['MENU', 'OPTIONS', 'GAME_OVER', 'CREDITS']) or safe_ui.active or portfolio_ui.active
     
     if getattr(camera, 'mouse_visible_state', None) != needs_mouse_visible:
         if needs_mouse_visible:
@@ -786,7 +786,7 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             pygame.mouse.set_visible(False)
         camera.mouse_visible_state = needs_mouse_visible
 
-    if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']:
+    if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER', 'CREDITS']:
         pygame.event.set_grab(False)
         pygame.mouse.set_visible(True)
         menu.render()
