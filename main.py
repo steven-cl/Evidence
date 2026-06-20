@@ -475,6 +475,12 @@ def setup_display():
     os.environ['SDL_VIDEO_CENTERED'] = "mouse"
     pygame.init()
     
+    try:
+        icon_img = pygame.image.load("source/icons/icon.jpg").convert()
+        pygame.display.set_icon(icon_img)
+    except Exception as e:
+        print("window icon error:", e)
+    
     settings = load_settings()
     info = pygame.display.Info()
     
