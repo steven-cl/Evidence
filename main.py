@@ -2,6 +2,7 @@ import os
 import json
 from time import sleep
 import pygame
+import math
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -46,6 +47,25 @@ NOTE_TEXTS = {
 # =============================================================================
 
 SETTINGS_FILE = "settings.json"
+
+# --- CINEMATIC & TUTORIAL STATES ---
+TUTORIAL_TEXTS = [
+    "Your sister Katherine was murdered by the infamous serial killer 'DollMaker'.",
+    "He specializes in hunting women, abusing them, and then dismembering them.",
+    "The police have chased him for years, but he always slips away.",
+    "If the police cannot find the culprit, you will. You have spent years studying this case.",
+    "Freddy is out shopping and will return in 15 minutes. He is about to move away.",
+    "Your mission: Collect enough evidence to prove Freddy IS the DollMaker.",
+    "CONTROLS: [WASD] Move, [MOUSE] Look, [SPACE] Jump, [SHIFT] Crouch, [E] Interact, [Q] Portfolio, [ESC] Pause.",
+    "You have 15 minutes. Be careful. If time runs out, you will lose your only chance to catch him."
+]
+
+class CinematicState:
+    def __init__(self):
+        self.active = False
+        self.text_index = 0
+        self.current_lerp = 0.0
+        self.started_game = False
 
 def load_settings():
     """
@@ -172,7 +192,7 @@ def create_shadowed_text_texture(text, font, color):
     
     return tex_id, cw, ch
 
-def draw_game_ui(width, height, remaining_time, action_text=None, notification_text=None, portfolio_ui=None):
+def draw_game_ui(width, height, remaining_time, action_text=None, notification_text=None, portfolio_ui=None, menu=None, cinematic=None):
     """
     Renders the main gameplay heads-up display (HUD).
     Draws the pause reminder, countdown timer, central crosshair interaction text, 
@@ -197,7 +217,67 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_TEXTURE_2D)
     
-    glColor4f(1.0, 1.0, 1.0, 1.0) 
+    glColor4f(1.0, 1.0, 1.0, 1.0)
+    
+    # CINEMATIC TUTORIAL OVERLAY
+    if menu and menu.state == 'CINEMATIC' and cinematic:
+        glDisable(GL_TEXTURE_2D)
+        glColor4f(0.0, 0.0, 0.0, 1.0)
+        glBegin(GL_QUADS)
+        glVertex2f(0, 0); glVertex2f(width, 0)
+        glVertex2f(width, 100); glVertex2f(0, 100)
+        glVertex2f(0, height - 150); glVertex2f(width, height - 150)
+        glVertex2f(width, height); glVertex2f(0, height)
+        glEnd()
+        glEnable(GL_TEXTURE_2D)
+        
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+        
+        if cinematic.text_index < len(TUTORIAL_TEXTS):
+            text_to_show = TUTORIAL_TEXTS[cinematic.text_index]
+            words = text_to_show.split(' ')
+            lines = []
+            current_line = []
+            for word in words:
+                current_line.append(word)
+                w, _ = _ui_font.size(' '.join(current_line))
+                if w > width * 0.8: 
+                    current_line.pop()
+                    lines.append(' '.join(current_line))
+                    current_line = [word]
+            if current_line:
+                lines.append(' '.join(current_line))
+                
+            y_offset = height - 110
+            for line in lines:
+                tex_tut, w_tut, h_tut = create_shadowed_text_texture(line, _ui_font, (255, 255, 255))
+                x_tut = (width - w_tut) // 2
+                glBindTexture(GL_TEXTURE_2D, tex_tut)
+                glBegin(GL_QUADS)
+                glTexCoord2f(0, 0); glVertex2f(x_tut, y_offset)
+                glTexCoord2f(1, 0); glVertex2f(x_tut + w_tut, y_offset)
+                glTexCoord2f(1, 1); glVertex2f(x_tut + w_tut, y_offset + h_tut)
+                glTexCoord2f(0, 1); glVertex2f(x_tut, y_offset + h_tut)
+                glEnd()
+                glDeleteTextures([tex_tut])
+                y_offset += h_tut + 5
+                
+            tex_skip, w_skip, h_skip = create_shadowed_text_texture("Next [ENTER]", _debug_font, (150, 150, 150))
+            x_skip = width - w_skip - 25
+            y_skip = height - h_skip - 25
+            glBindTexture(GL_TEXTURE_2D, tex_skip)
+            glBegin(GL_QUADS)
+            glTexCoord2f(0, 0); glVertex2f(x_skip, y_skip)
+            glTexCoord2f(1, 0); glVertex2f(x_skip + w_skip, y_skip)
+            glTexCoord2f(1, 1); glVertex2f(x_skip + w_skip, y_skip + h_skip)
+            glTexCoord2f(0, 1); glVertex2f(x_skip, y_skip + h_skip)
+            glEnd()
+            glDeleteTextures([tex_skip])
+            
+        glDisable(GL_TEXTURE_2D); glDisable(GL_BLEND); glEnable(GL_FOG); glEnable(GL_DEPTH_TEST)
+        glMatrixMode(GL_PROJECTION); glPopMatrix()
+        glMatrixMode(GL_MODELVIEW); glPopMatrix()
+        return
     
     # 1. PAUSE INDICATOR 
     pause_text = "[ESC] Pause"
@@ -274,13 +354,10 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
         glEnd()
         
         try:
-            # Times New Roman y Georgia comparten los "patines" visuales de Courier, 
-            # pero su 'Q' tiene la curva que nace desde el interior.
             q_font = pygame.font.SysFont("times new roman, georgia, serif", 26, bold=True)
         except:
             q_font = _ui_font
             
-        # Tinta negra pura sin sombra
         q_surf = q_font.render("[Q]", True, (15, 15, 15)) 
         w_q, h_q = q_surf.get_size()
         q_data = pygame.image.tobytes(q_surf, "RGBA", False)
@@ -504,11 +581,11 @@ def setup_camera(screen_width, screen_height):
     camera = CameraFPS(screen_width, screen_height)
     camera.configure_projection()
     
-    camera.pos_x = 0.0 
+    camera.pos_x = 2.37 
     camera.pos_y = 1.65
-    camera.pos_z = 0.0   
-    camera.pitch = -45.0 
-    camera.yaw = -90.0   
+    camera.pos_z = -8.48   
+    camera.pitch = 0.0 
+    camera.yaw = 90.0
 
     # Variables for inventory and notifications
     camera.has_key = False
@@ -581,7 +658,7 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                         
                         # Note recognition logic
                         is_note = False
-                        note_id = "matnota" # Fallback mapping
+                        note_id = "matnota" 
                         
                         if "nota" in obj_name:
                             is_note = True
@@ -602,7 +679,6 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                             setting_inspectables.remove(looked_obj)
                             grabbed = True
                         else:
-                            # Regular 3D item inspection
                             inspected_object = looked_obj
                             grabbed = True
                 
@@ -627,7 +703,7 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                 
     return inspected_object
 
-def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui):
+def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui, cinematic):
     """
     Main event routing function. Dispatches Pygame window inputs to the active UI state
     (Menu, Safe interface, Portfolio UI, or Gameplay physics).
@@ -649,32 +725,29 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
             menu.options_start_y = menu.center_y + 20
 
         if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']:
-            
-            # --- FIX: Prevent ESC from closing the game in the Main Menu ---
-            # Acts as an "Unpause" button to seamlessly return to the action
             if menu.state == 'MENU' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 menu.state = 'GAME'
                 if audio: audio.play_sfx("ui_click")
                 continue
-            # ---------------------------------------------------------------
-            
+                
             menu.handle_input(event, camera, audio)
             
             if menu.state == 'QUIT':
                 return False, inspected_object
                 
+        elif menu.state == 'CINEMATIC':
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                if audio: audio.play_sfx("ui_click") 
+                cinematic.text_index += 1
+                    
         elif menu.state == 'GAME':
-            
-            # --- GLOBAL PORTFOLIO HOTKEY ---
             if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                # Disallow opening portfolio if interacting with the safe
                 if not safe_ui.active: 
                     portfolio_ui.active = not portfolio_ui.active
                     if portfolio_ui.active:
                         audio.play_sfx("inspect_paper")
-                    continue # Bypass event processing for this frame
+                    continue 
 
-            # Route input to UI
             if safe_ui.active:
                 unlocked = safe_ui.handle_event(event, audio)
                 if unlocked:
@@ -693,7 +766,7 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
 
     return True, inspected_object
 
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, current_fog_density, audio, setting_inspectables, inspected_object, safe_ui, portfolio_ui):
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, current_fog_density, audio, setting_inspectables, inspected_object, safe_ui, portfolio_ui, cinematic):
     """
     Executes specific screen clear procedures and orchestrates the rendering of UI matrices 
     or 3D spatial geometry depending on the active game state.
@@ -727,7 +800,7 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         dx, dy = pygame.mouse.get_rel()
         
-        if not safe_ui.active and not portfolio_ui.active:
+        if not safe_ui.active and not portfolio_ui.active and menu.state != 'CINEMATIC':
             if inspected_object:
                 inspected_object.rot_y += dx * 0.5
                 inspected_object.rot_x += dy * 0.5
@@ -764,12 +837,12 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         _updated_density = current_fog_density + (target_density - current_fog_density) * interpolation_speed * dt
 
         keys = pygame.key.get_pressed()
-        is_moving = keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]
         
-        if not inspected_object and not safe_ui.active and not portfolio_ui.active:
+        is_moving = (keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]) and menu.state != 'CINEMATIC'
+        
+        if not inspected_object and not safe_ui.active and not portfolio_ui.active and menu.state != 'CINEMATIC':
             camera.process_keyboard(dt, frame_colliders)
         
-        # Phase 1: Render Skybox (Requires depth test off so it draws infinitely far away)
         glDisable(GL_DEPTH_TEST)
         
         glEnable(GL_FOG)
@@ -786,26 +859,21 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         glDisable(GL_LIGHTING) 
         skybox.draw()
 
-        # Phase 2: Render 3D World Geometry
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
         camera.update_view()
         
-        # Lamp 1
         lamp_position_1 = [-0.351, 2.6602, 2.1109, 1.0] 
         glLightfv(GL_LIGHT0, GL_POSITION, lamp_position_1)
         
-        # Lamp 2
         lamp_position_2 = [-6.6994, 2.6715, 2.1109, 1.0] 
         glLightfv(GL_LIGHT1, GL_POSITION, lamp_position_2)
 
-        # Lamp 3
         lamp_position_3 = [2.8231, -0.031169, -2.6032, 1.0]
         glLightfv(GL_LIGHT2, GL_POSITION, lamp_position_3)
 
         update_doors(setting_doors, dt)
 
-        # Dynamic Notification Tracker
         if camera.notification_timer > 0:
             camera.notification_timer -= dt
             notification_text = camera.notification_message
@@ -858,9 +926,10 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         except OpenGL.error.Error:
             pass 
         
-        draw_crosshair(camera.width, camera.height)
+        if menu.state != 'CINEMATIC':
+            draw_crosshair(camera.width, camera.height)
         
-        draw_game_ui(camera.width, camera.height, game_time, action_text, notification_text, portfolio_ui)
+        draw_game_ui(camera.width, camera.height, game_time, action_text, notification_text, portfolio_ui, menu, cinematic)
 
         if debug_state.overlay:
             draw_debug_visuals(camera, house, setting_doors, debug_state.wireframe)
@@ -980,6 +1049,8 @@ def main():
     tension_triggered = False
     timer_channel = None
     last_state = 'MENU'
+    
+    cinematic = CinematicState()
 
     while running:
         dt = clock.tick(60) / 1000.0
@@ -993,11 +1064,12 @@ def main():
             camera.notification_timer = 0.0
             inspected_object = None
             
+            cinematic.started_game = False
+            
             safe_ui.active = False
             safe_ui.input_buffer = ""
             safe_ui.error_timer = 0.0
             
-            # --- CLEAR PORTFOLIO PROGRESS ON DEATH ---
             portfolio_ui.active = False
             portfolio_ui.collected_notes.clear()
             portfolio_ui.current_page = 0
@@ -1029,13 +1101,70 @@ def main():
             last_state = 'GAME'
 
         pygame.event.pump()
-        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui)
         
+        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui, cinematic)
+        
+        
+        if menu.state == 'GAME' and not cinematic.started_game:
+            menu.state = 'CINEMATIC'
+            cinematic.started_game = True
+            cinematic.active = True
+            cinematic.camera_lerp = 0.0
+            cinematic.text_index = 0
+            
+            camera.pos_x = 0.0
+            camera.pos_y = 15.0
+            camera.pos_z = 25.0
+            camera.pitch = -30.0
+            camera.yaw = -90.0
+            camera.update_camera_vectors()
+            
+        if menu.state == 'CINEMATIC':
+            cinematic.current_lerp += dt * 0.027  
+            
+            if cinematic.current_lerp > 1.0:
+                cinematic.current_lerp = 1.0
+                
+            smooth_t = cinematic.current_lerp
+            
+            if smooth_t < 0.35:
+                local_t = smooth_t / 0.35
+                camera.pos_x = -2.0 + (4.0 * local_t)  
+                camera.pos_y = 1.65
+                camera.pos_z = -12.0 
+                camera.pitch = 0.0
+                camera.yaw = 45.0 + (45.0 * local_t)  
+                
+            else:
+                local_t = (smooth_t - 0.35) / 0.65
+                
+                camera.pos_x = 2.37
+                
+                if local_t < 1.0:
+                    walk_bob = math.sin(local_t * math.pi * 18) * 0.12
+                else:
+                    walk_bob = 0.0
+                    
+                camera.pos_y = 1.65 + walk_bob
+                camera.pos_z = 12.0 + (-8.48 - 12.0) * local_t
+                camera.pitch = 0.0
+                camera.yaw = 90.0 
+                
+            camera.update_camera_vectors()
+
+            if cinematic.current_lerp >= 1.0 and cinematic.text_index >= len(TUTORIAL_TEXTS):
+                menu.state = 'GAME'
+                cinematic.active = False
+                camera.yaw = 90.0
+                camera.update_camera_vectors()
+
         if last_state != menu.state:
-            if menu.state == 'MENU' and last_state == 'GAME':
+            if menu.state == 'MENU' and last_state in ['GAME', 'CINEMATIC']:
                 audio.play_ambient_music("menu.mp3", loops=-1)
                 if timer_channel:
                     timer_channel.pause()
+            elif menu.state == 'CINEMATIC' and last_state in ['MENU', 'OPTIONS']:
+                audio.play_ambient_music("suspense_ambient.mp3", loops=-1)
             elif menu.state == 'GAME' and last_state in ['MENU', 'OPTIONS']:
                 if tension_triggered:
                     audio.play_ambient_music("few_time.mp3", loops=-1)
@@ -1090,7 +1219,7 @@ def main():
                 menu, camera, skybox, house, config_visual, setting_doors, 
                 door_materials, dt, clock, debug_state, game_time, 
                 house_display_list, static_colliders, current_fog_density, audio,
-                setting_inspectables, inspected_object, safe_ui, portfolio_ui
+                setting_inspectables, inspected_object, safe_ui, portfolio_ui, cinematic
             )
         
         pygame.event.pump()

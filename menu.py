@@ -274,7 +274,7 @@ class MainMenu:
             "You became just another one of his victims,",
             "and nobody ever heard from you again.",
             "",
-            "For DollMaker, you were his favorite toy because you dared",
+            "For Freddy, you were his favorite toy because you dared",
             "to take the risk of entering his house to investigate him."
         ]
         
