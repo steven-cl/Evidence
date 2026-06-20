@@ -17,15 +17,21 @@ class MainMenu:
         self.options_selection = 0
         self.options_fields = ["Volume", "Display", "Return to Case File"]
 
+        # Game Over state initialization
+        self.game_over_options = ["Restart Investigation", "Archive Case"]
+        self.game_over_selection = 0
+
         pygame.font.init()
         try:
             self.font_title = pygame.font.SysFont("Courier New", 48, bold=True)
             self.font_slogan = pygame.font.SysFont("Courier New", 16, italic=True)
             self.font_options = pygame.font.SysFont("Courier New", 28, bold=True)
+            self.font_narrative = pygame.font.SysFont("Courier New", 18, bold=False) # Font for the death story
         except:
             self.font_title = pygame.font.Font(None, 54)
             self.font_slogan = pygame.font.Font(None, 24)
             self.font_options = pygame.font.Font(None, 32)
+            self.font_narrative = pygame.font.Font(None, 22)
             
         self.center_x = self.width // 2
         self.center_y = self.height // 2
@@ -36,20 +42,28 @@ class MainMenu:
 
     def handle_input(self, event, camera=None, audio=None):
         if event.type == pygame.MOUSEMOTION:
-            mouse_x, mouse_y = event.pos
+            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU':
-                        if self.selected_index != idx: # Solo suena al entrar al botón
+                        if self.selected_index != idx:
                             self.selected_index = idx
                             if audio: audio.play_sfx("ui_click")
                     elif self.state == 'OPTIONS':
                         if self.options_selection != idx:
                             self.options_selection = idx
                             if audio: audio.play_sfx("ui_click")
+                    elif self.state == 'GAME_OVER':
+                        if self.game_over_selection != idx:
+                            self.game_over_selection = idx
+                            if audio: audio.play_sfx("ui_click")
                     
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_x, mouse_y = event.pos
+            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            
             for idx, rect in enumerate(self.hitboxes):
                 if rect.collidepoint(mouse_x, mouse_y):
                     if self.state == 'MENU' and event.button == 1:
@@ -57,6 +71,14 @@ class MainMenu:
                         if audio: audio.play_sfx("ui_click")
                         self.execute_selection()
                         
+                    elif self.state == 'GAME_OVER' and event.button == 1:
+                        self.game_over_selection = idx 
+                        if audio: audio.play_sfx("ui_click")
+                        if self.game_over_selection == 0:
+                            self.state = 'RESTART'
+                        else:
+                            self.state = 'QUIT'
+                            
                     elif self.state == 'OPTIONS':
                         self.options_selection = idx 
                         if self.options_selection == 2 and event.button == 1: 
@@ -90,19 +112,34 @@ class MainMenu:
                 elif event.key == pygame.K_DOWN:
                     self.options_selection = (self.options_selection + 1) % len(self.options_fields)
                     if audio: audio.play_sfx("ui_click")
-                
                 elif event.key == pygame.K_LEFT:
                     if audio: audio.play_sfx("ui_click")
                     self.adjust_option(-1, camera)
                 elif event.key == pygame.K_RIGHT:
                     if audio: audio.play_sfx("ui_click")
                     self.adjust_option(1, camera)
-                
                 elif event.key == pygame.K_RETURN and self.options_selection == 2:
                     if audio: audio.play_sfx("ui_click")
                     self.state = 'MENU'
                 elif event.key == pygame.K_ESCAPE:
                     self.state = 'MENU'
+                    
+            elif self.state == 'GAME_OVER':
+                if event.key == pygame.K_UP:
+                    self.game_over_selection = (self.game_over_selection - 1) % len(self.game_over_options)
+                    if audio: audio.play_sfx("ui_click")
+                elif event.key == pygame.K_DOWN:
+                    self.game_over_selection = (self.game_over_selection + 1) % len(self.game_over_options)
+                    if audio: audio.play_sfx("ui_click")
+                elif event.key == pygame.K_RETURN:
+                    if audio: audio.play_sfx("ui_click")
+                    if self.game_over_selection == 0:
+                        self.state = 'RESTART'
+                    else:
+                        self.state = 'QUIT'
+                elif event.key == pygame.K_ESCAPE:
+                    if audio: audio.play_sfx("ui_click")
+                    self.state = 'QUIT'
 
     def execute_selection(self):
         if self.selected_index == 0:
@@ -122,20 +159,13 @@ class MainMenu:
                 self.apply_display_mode(camera)
 
     def apply_display_mode(self, camera):
-        """
-        Toggles between fullscreen and windowed display modes 
-        while preserving the active OpenGL context and textures.
-        """
         pygame.display.toggle_fullscreen()
-        
         surface = pygame.display.get_surface()
         new_w, new_h = surface.get_width(), surface.get_height()
-        
         glViewport(0, 0, new_w, new_h)
         camera.width = new_w
         camera.height = new_h
         camera.configure_projection()
-        
         self.width = new_w
         self.height = new_h
         self.center_x = new_w // 2
@@ -146,31 +176,25 @@ class MainMenu:
         text_surface = font.render(text, True, color)
         w, h = text_surface.get_size()
         text_data = pygame.image.tobytes(text_surface, "RGBA", False)
-
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, text_data)
-
         glColor4f(1.0, 1.0, 1.0, 1.0) 
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glEnable(GL_TEXTURE_2D)
-        
         draw_x = x - w // 2
-        
         glBegin(GL_QUADS)
         glTexCoord2f(0, 0); glVertex2f(draw_x, y)
         glTexCoord2f(1, 0); glVertex2f(draw_x + w, y)
         glTexCoord2f(1, 1); glVertex2f(draw_x + w, y + h)
         glTexCoord2f(0, 1); glVertex2f(draw_x, y + h)
         glEnd()
-        
         glDisable(GL_TEXTURE_2D)
         glDisable(GL_BLEND)
         glDeleteTextures([tex_id])
-        
         return pygame.Rect(draw_x, y, w, h)
 
     def render(self):
@@ -178,11 +202,9 @@ class MainMenu:
         glPushMatrix()
         glLoadIdentity()
         glOrtho(0, self.width, self.height, 0, -1, 1)
-        
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         glLoadIdentity()
-        
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_LIGHTING)
         glDisable(GL_FOG)
@@ -199,6 +221,8 @@ class MainMenu:
             self._render_main_menu()
         elif self.state == 'OPTIONS':
             self._render_options_menu()
+        elif self.state == 'GAME_OVER':
+            self._render_game_over()
             
         glEnable(GL_FOG)
         glEnable(GL_DEPTH_TEST)
@@ -210,40 +234,64 @@ class MainMenu:
     def _render_main_menu(self):
         self.draw_text_gl(self.center_x, self.center_y - 120, "E V I D E N C E", self.font_title, (139, 0, 0))
         self.draw_text_gl(self.center_x, self.center_y - 60, "Resolve the Mystery", self.font_slogan, (200, 200, 200))
-        
         for i, option in enumerate(self.options):
             y_pos = self.options_start_y + (i * self.option_spacing)
-            
             if i == self.selected_index:
                 display_text = f"> {option} <"
                 color = (180, 0, 0)
             else:
                 display_text = f"  {option}  "
                 color = (130, 130, 130)
-                
             rect = self.draw_text_gl(self.center_x, y_pos, display_text, self.font_options, color)
             self.hitboxes.append(rect)
 
     def _render_options_menu(self):
         self.draw_text_gl(self.center_x, self.center_y - 120, "FIELD ADJUSTMENTS", self.font_title, (139, 0, 0))
-
         display_str = "Full Screen" if self.is_fullscreen else "Windowed"
-
         opt_text = [
             f"Audio Volume:  {self.volume}%",
             f"Display:       {display_str}",
             "Return to Case File"
         ]
-
         for i, text in enumerate(opt_text):
             y_pos = self.options_start_y + (i * self.option_spacing)
-            
             if i == self.options_selection:
                 display_text = f"> {text} <"
                 color = (180, 0, 0)
             else:
                 display_text = f"  {text}  "
                 color = (130, 130, 130)
-            
+            rect = self.draw_text_gl(self.center_x, y_pos, display_text, self.font_options, color)
+            self.hitboxes.append(rect)
+
+    def _render_game_over(self):
+        self.draw_text_gl(self.center_x, self.center_y - 180, "Y O U   L O S E", self.font_title, (180, 0, 0))
+        
+        # Narrative of death
+        story_lines = [
+            "The serial killer returned home and found you inside.",
+            "He entered, massacred you, and tore you to pieces.",
+            "You became just another one of his victims,",
+            "and nobody ever heard from you again.",
+            "",
+            "For DollMaker, you were his favorite toy because you dared",
+            "to take the risk of entering his house to investigate him."
+        ]
+        
+        y_offset = self.center_y - 110
+        for line in story_lines:
+            self.draw_text_gl(self.center_x, y_offset, line, self.font_narrative, (170, 170, 170))
+            y_offset += 25
+        
+        # Interactive Options
+        options_y = y_offset + 30
+        for i, option in enumerate(self.game_over_options):
+            y_pos = options_y + (i * self.option_spacing)
+            if i == self.game_over_selection:
+                display_text = f"> {option} <"
+                color = (180, 0, 0)
+            else:
+                display_text = f"  {option}  "
+                color = (130, 130, 130)
             rect = self.draw_text_gl(self.center_x, y_pos, display_text, self.font_options, color)
             self.hitboxes.append(rect)

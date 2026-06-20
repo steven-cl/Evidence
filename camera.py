@@ -32,7 +32,7 @@ class CameraFPS:
 
         # Input and physics parameters
         self.sensitivity = 0.1  
-        self.jump_force = 2.5
+        self.jump_force = 3.5
         
         self.velocity_y = 0.0
         self.gravity = 9.8

@@ -196,7 +196,7 @@ def create_visual_config():
         "matNotaD": Texture('source/textures/texture_nota.jpg'),
         "matNotaE": Texture('source/textures/texture_nota.jpg'),
         "matNotaF": Texture('source/textures/texture_nota.jpg'),
-        "matNota2": Texture('source/textures/texture_notaB.jpg'),
+        "matNota2": Texture('source/textures/texture_nota.jpg'),
         "matPcaja": (0.45, 0.45, 0.45),
         "matPanel": Texture('source/textures/texture_caja.jpg'),
         "matN": Texture('source/textures/texture_caja.jpg'),
@@ -237,7 +237,7 @@ def create_doors():
         setattr(door, 'is_safe', is_safe_door)
         setattr(door, 'is_locked', is_safe_door)
         
-        # Require key to open Door #7
+        # Require key to open Door #6
         if door.mat == "matPuerta6":
             setattr(door, 'requires_key', True)
             setattr(door, 'is_locked', True)
@@ -257,6 +257,8 @@ def create_doors():
 #Nota 5: Me levanté temprano hoy, desayuné muy tranquilamente sabiendo que le di la eternidad y belleza de una muñeca a todas ellas.
 
 #Nota 6: Al principio suelen ser ruidosas, pero una vez que se dan cuenta de que les hice un favor dejan de quejarse. Supongo que es parte de compartirme su felicidad.
+
+#Nota 7: Como las amo, las tengo a todas conmigo, no necesito nada más. No me importa si el mundo se acaba mañana, mientras las tenga a ellas, estaré bien.
 
 
 
@@ -319,10 +321,24 @@ def load_scene_assets():
     return house, visual_config, setting_doors, door_materials, setting_inspectables, inspectable_materials
 
 
+
+
 def apply_material(material_name, config_visual):
+    # 1. LISTA DE MATERIALES LUMINOSOS
+    # Cambia "matBombillo" por el nombre exacto que tiene el material de tu lámpara en Blender
+    emissive_materials = ["matLA", "matLB", "matLC", "matLD", "matLE", "matLF", "matLG", "matLH","matLJ","matBright", "matIlu"] 
+    
+    # Si el material está en la lista, le decimos a OpenGL que brille con un color cálido
+    if material_name in emissive_materials:
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1.0, 0.9, 0.8, 1.0])
+    else:
+        # Si es cualquier otra pared o mueble, apagamos la emisión para que use sombras normales
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0.0, 0.0, 0.0, 1.0])
+
+    # 2. APLICAR TEXTURA O COLOR (Tu código original)
     if material_name in config_visual:
         assigned = config_visual[material_name]
-        if isinstance(assigned, Texture):
+        if hasattr(assigned, 'bind'):
             glEnable(GL_TEXTURE_2D)
             glColor3f(1.0, 1.0, 1.0)
             assigned.bind()
@@ -334,7 +350,6 @@ def apply_material(material_name, config_visual):
         glDisable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, 0)
         glColor3f(0.6, 0.6, 0.6)
-
 
 def draw_static_model(house, visual_config, door_materials, inspectable_materials=None):
     glPushMatrix()

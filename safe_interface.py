@@ -68,15 +68,15 @@ class SafeInterface:
         # --- KEYBOARD INPUT HANDLING ---
         if event.type == pygame.KEYDOWN:
             
-            # 1. Siempre permitir salir con ESC, incluso si hay error
+            # 1. Always allow exiting with ESC, even during an error state
             if event.key == pygame.K_ESCAPE:
                 self.active = False
                 self.input_buffer = ""
-                self.error_timer = 0.0 # Resetea el error al salir
+                self.error_timer = 0.0 # Reset the error state upon exit
                 return False
                 
-            # --- NUEVO: BLOQUEO POR ERROR ---
-            # Si el LED de error está encendido, ignorar cualquier otra tecla
+            # --- ERROR LOCKOUT ---
+            # If the error LED is active, ignore all other key inputs
             if self.error_timer > 0:
                 return False
                 
@@ -110,6 +110,7 @@ class SafeInterface:
         # --- MOUSE INPUT HANDLING ---
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             
+            # If the error LED is active, ignore clicks
             if self.error_timer > 0:
                 return False
 
@@ -120,7 +121,8 @@ class SafeInterface:
             x_offset = (screen_width - draw_w) / 2
             y_offset = (screen_height - draw_h) / 2
             
-            mx, my = event.pos
+            # FIX: Use absolute mouse position to prevent SDL2 Linux ungrab desync bugs
+            mx, my = pygame.mouse.get_pos() 
             
             # Evaluate grid interactions
             for char, (rx, ry, rw, rh) in self.key_rects.items():
@@ -188,9 +190,8 @@ class SafeInterface:
         
         glEnable(GL_TEXTURE_2D)
         
-        # --- FIX: Limpiar el color de OpenGL para que la textura brille al 100% ---
+        # --- FIX: Clear the OpenGL color to ensure the texture renders at 100% brightness ---
         glColor4f(1.0, 1.0, 1.0, 1.0)
-        # --------------------------------------------------------------------------
         
         glBegin(GL_QUADS)
         glTexCoord2f(0, 1); glVertex2f(x, y)
@@ -323,13 +324,13 @@ class SafeInterface:
         elif len(self.input_buffer) > 0:
             # Show only the last 8 characters so it scrolls left like a real calculator
             display_str = self.input_buffer[-8:]
-            self.draw_text(display_str, disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Verde Brillante Puro
+            self.draw_text(display_str, disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Pure Bright Green
         else:
             # Idle cursor
-            self.draw_text("_", disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Mismo verde brillante puro
+            self.draw_text("_", disp_x + 15, text_y_center, self.font, (0, 255, 0)) # Same pure bright green
 
         # Instructions
-        self.draw_text("Press [ESC] to Exit", 25, 25, self.font_small, (200, 200, 200)) # Este ya no desaparecerá
+        self.draw_text("Press [ESC] to Exit", 25, 25, self.font_small, (200, 200, 200)) # This will no longer disappear
         
         glEnable(GL_FOG)
         glEnable(GL_DEPTH_TEST)
