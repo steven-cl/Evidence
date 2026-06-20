@@ -1,6 +1,24 @@
 import pygame # pyright: ignore[reportMissingImports]
 from OpenGL.GL import * # pyright: ignore[reportMissingImports]
 import os
+import json
+
+# =============================================================================
+# --- INTERNATIONALIZATION (i18n) SYSTEM ---
+# =============================================================================
+
+def load_language(lang_code="en"):
+    """
+    Loads the text dictionary from the specified JSON locale file.
+    """
+    try:
+        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading language {lang_code}: {e}")
+        return {}
+
+LANG = load_language("en")
 
 class PortfolioInterface:
     def __init__(self):
@@ -26,7 +44,6 @@ class PortfolioInterface:
         self.font_nav = pygame.font.SysFont("Courier New", 24, bold=True)
         self.font_handwriting = pygame.font.SysFont("Georgia", 28, italic=True) 
         
-        # --- FIX: Fuente de tamaño ideal para el contador de páginas ---
         self.font_counter = pygame.font.SysFont("Courier New", 28, bold=True)
 
     def load_texture(self, image_path):
@@ -250,7 +267,8 @@ class PortfolioInterface:
         # 4. Draw Content on top of Clipboard
         if not self.collected_notes:
             # EMPTY PORTFOLIO
-            self.draw_single_line("Portfolio is Empty", screen_width/2, screen_height/2, self.font_title, (70, 50, 40), center=True)
+            empty_text = LANG.get("port_empty", "Portfolio is Empty")
+            self.draw_single_line(empty_text, screen_width/2, screen_height/2, self.font_title, (70, 50, 40), center=True)
             self.left_btn_rect = None
             self.right_btn_rect = None
         else:
@@ -278,13 +296,15 @@ class PortfolioInterface:
                     glDisable(GL_TEXTURE_2D)
                 
                 if i == 0:
-                    text = self.collected_notes[self.current_page]
+                    note_key = self.collected_notes[self.current_page]
+                    # Real time translation lookup for the note's text content
+                    text = LANG.get(note_key, "Illegible text...") 
                     text_x = nx + (draw_note_w * 0.15)
                     text_y = ny + (draw_note_h * 0.15)
                     max_w = draw_note_w * 0.7
                     self.draw_text_block(text, text_x, text_y, max_w, color=(50, 20, 20))
             
-            page_text = f"Case File {self.current_page + 1} / {len(self.collected_notes)}"
+            page_text = LANG.get("port_page", "Case File {page} / {total}").replace("{page}", str(self.current_page + 1)).replace("{total}", str(len(self.collected_notes)))
             self.draw_single_line(page_text, screen_width/2, port_y + draw_port_h - 10, self.font_counter, (240, 240, 240), center=True)
             
             if self.left_btn_rect:
@@ -297,20 +317,20 @@ class PortfolioInterface:
                 if rx <= mx <= rx + rw and ry <= my <= ry + rh:
                     right_color = (220, 50, 50)
 
-            left_x = port_x + (draw_port_w * 0.20) - 5
-            right_x = port_x + (draw_port_w * 0.80) + 5
+            left_x = port_x + (draw_port_w * 0.15)
+            right_x = port_x + (draw_port_w * 0.85)
             
             if self.current_page > 0:
-                self.left_btn_rect = self.draw_single_line("< PREV", left_x, screen_height/2, self.font_title, left_color, center=True)
+                self.left_btn_rect = self.draw_single_line(LANG.get("port_prev", "< PREV"), left_x, screen_height/2, self.font_title, left_color, center=True)
             else:
                 self.left_btn_rect = None
                 
             if self.current_page < len(self.collected_notes) - 1:
-                self.right_btn_rect = self.draw_single_line("NEXT >", right_x, screen_height/2, self.font_title, right_color, center=True)
+                self.right_btn_rect = self.draw_single_line(LANG.get("port_next", "NEXT >"), right_x, screen_height/2, self.font_title, right_color, center=True)
             else:
                 self.right_btn_rect = None
 
-        self.draw_single_line("Press [Q] or [ESC] to Close", 25, 25, self.font_nav, (200, 200, 200), center=False)
+        self.draw_single_line(LANG.get("port_close", "Press [Q] or [ESC] to Close"), 25, 25, self.font_nav, (200, 200, 200), center=False)
         
         glEnable(GL_FOG)
         glEnable(GL_DEPTH_TEST)
@@ -318,3 +338,8 @@ class PortfolioInterface:
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
+        
+    def update_language(self, new_lang_dict):
+        global LANG
+        LANG.clear()
+        LANG.update(new_lang_dict)

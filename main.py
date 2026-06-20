@@ -29,43 +29,34 @@ from scene_loader import (
 )
 
 # =============================================================================
-# --- NARRATIVE & LORE ---
+# --- INTERNATIONALIZATION (i18n) SYSTEM ---
 # =============================================================================
 
-NOTE_TEXTS = {
-    "matnota": "The house was abandoned for a long time, how could someone live in such precarious conditions, unless life is the last thing of value here.",
-    "matnotab": "DollMaker usually checks his watch 4 times while torturing his victims, a man obsessed with time never lives in peace.",
-    "matnotac": "You could try entering the numbers in ascending order.",
-    "matnotad": "Time is a silent killer, maybe this time it will help you catch one.",
-    "matnotae": "I woke up early today, had breakfast very calmly knowing that I gave all of them the eternity and beauty of a doll.",
-    "matnotaf": "At first they are usually noisy, but once they realize I did them a favor they stop complaining. I guess it's part of them sharing their happiness with me.",
-    "matnota2": "How I love them, I have them all with me, I don't need anything else. I don't care if the world ends tomorrow, as long as I have them, I'll be fine."
-}
+def load_language():
+    lang_code = "en"
+    if os.path.exists("settings.json"):
+        try:
+            with open("settings.json", "r") as f:
+                lang_code = json.load(f).get("language", "en")
+        except: pass
+    try:
+        with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {}
+
+LANG = load_language()
+
+TUTORIAL_TEXTS = [
+    LANG.get("tut_1", ""), LANG.get("tut_2", ""), LANG.get("tut_3", ""), LANG.get("tut_4", ""),
+    LANG.get("tut_5", ""), LANG.get("tut_6", ""), LANG.get("tut_7", ""), LANG.get("tut_8", "")
+]
 
 # =============================================================================
 # --- PERSISTENCE ENGINE (SAVING) ---
 # =============================================================================
 
 SETTINGS_FILE = "settings.json"
-
-# --- CINEMATIC & TUTORIAL STATES ---
-TUTORIAL_TEXTS = [
-    "Your sister Katherine was murdered by the infamous serial killer 'DollMaker'.",
-    "He specializes in hunting women, abusing them, and then dismembering them.",
-    "The police have chased him for years, but he always slips away.",
-    "If the police cannot find the culprit, you will. You have spent years studying this case.",
-    "Freddy is out shopping and will return in 15 minutes. He is about to move away.",
-    "Your mission: Collect enough evidence to prove Freddy IS the DollMaker.",
-    "CONTROLS: [WASD] Move, [MOUSE] Look, [SPACE] Jump, [SHIFT] Crouch, [E] Interact, [Q] Portfolio, [ESC] Pause.",
-    "You have 15 minutes. Be careful. If time runs out, you will lose your only chance to catch him."
-]
-
-class CinematicState:
-    def __init__(self):
-        self.active = False
-        self.text_index = 0
-        self.current_lerp = 0.0
-        self.started_game = False
 
 def load_settings():
     """
@@ -76,7 +67,8 @@ def load_settings():
         "width": 0,          
         "height": 0,
         "is_fullscreen": False,
-        "volume": 80
+        "volume": 80,
+        "language": "en"
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -95,13 +87,22 @@ def save_settings(camera, menu):
         "width": camera.width,
         "height": camera.height,
         "is_fullscreen": getattr(menu, 'is_fullscreen', False),
-        "volume": getattr(menu, 'volume', 80)
+        "volume": getattr(menu, 'volume', 80),
+        "language": getattr(menu, 'language', 'en')
     }
     try:
         with open(SETTINGS_FILE, "w") as f:
             json.dump(settings, f)
     except Exception as e:
         print(f"Error saving settings: {e}")
+        
+
+class CinematicState:
+    def __init__(self):
+        self.active = False
+        self.text_index = 0
+        self.current_lerp = 0.0
+        self.started_game = False
 
 # =============================================================================
 # --- TACTICAL DEBUG & UI SYSTEM ---
@@ -262,7 +263,20 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
                 glDeleteTextures([tex_tut])
                 y_offset += h_tut + 5
                 
-            tex_skip, w_skip, h_skip = create_shadowed_text_texture("Next [ENTER]", _debug_font, (150, 150, 150))
+            tex_skip, w_skip, h_skip = create_shadowed_text_texture(LANG.get("cinematic_next", "Next [ENTER]"), _debug_font, (150, 150, 150))
+            x_skip = width - w_skip - 25
+            y_skip = height - h_skip - 25
+            glBindTexture(GL_TEXTURE_2D, tex_skip)
+            glBegin(GL_QUADS)
+            glTexCoord2f(0, 0); glVertex2f(x_skip, y_skip)
+            glTexCoord2f(1, 0); glVertex2f(x_skip + w_skip, y_skip)
+            glTexCoord2f(1, 1); glVertex2f(x_skip + w_skip, y_skip + h_skip)
+            glTexCoord2f(0, 1); glVertex2f(x_skip, y_skip + h_skip)
+            glEnd()
+            glDeleteTextures([tex_skip])
+            
+        else:
+            tex_skip, w_skip, h_skip = create_shadowed_text_texture(LANG.get("cinematic_skip", "Skip [ENTER]"), _debug_font, (150, 150, 150))
             x_skip = width - w_skip - 25
             y_skip = height - h_skip - 25
             glBindTexture(GL_TEXTURE_2D, tex_skip)
@@ -280,7 +294,7 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
         return
     
     # 1. PAUSE INDICATOR 
-    pause_text = "[ESC] Pause"
+    pause_text = LANG.get("hud_pause", "[ESC] Pause")
     tex_p, w_p, h_p = create_shadowed_text_texture(pause_text, _ui_font, (220, 220, 220))
     glBindTexture(GL_TEXTURE_2D, tex_p)
     glBegin(GL_QUADS)
@@ -573,7 +587,7 @@ def setup_display():
         flags |= FULLSCREEN
         
     pygame.display.set_mode((screen_width, screen_height), flags)
-    pygame.display.set_caption("Evidence - Resolve the Mystery")
+    pygame.display.set_caption(LANG.get("window_title", "Evidence - Resolve the Mystery"))
     
     return screen_width, screen_height, settings
 
@@ -649,7 +663,7 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                     if getattr(looked_obj, 'name', '') == 'Key':
                         camera.has_key = True
                         camera.notification_timer = 3.0
-                        camera.notification_message = "You have taken the key"
+                        camera.notification_message = LANG.get("hud_key_taken", "")
                         setting_inspectables.remove(looked_obj) 
                         grabbed = True
                     else:
@@ -671,11 +685,10 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                                 
                         if is_note:
                             # Transfer to portfolio array and remove from world
-                            text = NOTE_TEXTS.get(note_id, "Illegible text...")
-                            portfolio_ui.add_note(text)
+                            portfolio_ui.add_note(f"note_{note_id}")
                             audio.play_sfx("inspect_paper")
                             camera.notification_timer = 3.0
-                            camera.notification_message = "Note added to Portfolio"
+                            camera.notification_message = LANG.get("hud_note_added", "")
                             setting_inspectables.remove(looked_obj)
                             grabbed = True
                         else:
@@ -738,7 +751,11 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
         elif menu.state == 'CINEMATIC':
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                 if audio: audio.play_sfx("ui_click") 
-                cinematic.text_index += 1
+                
+                if cinematic.text_index < len(TUTORIAL_TEXTS):
+                    cinematic.text_index += 1
+                else:
+                    cinematic.current_lerp = 1.0
                     
         elif menu.state == 'GAME':
             if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
@@ -887,7 +904,7 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         looked_obj = None
         
         if inspected_object:
-            action_text = "Press [E] to Drop"
+            action_text = LANG.get("hud_press_drop", "")
         else:
             for obj in setting_inspectables:
                 if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
@@ -902,18 +919,18 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             
             if looked_obj:
                 if getattr(looked_obj, 'name', '') == 'Key':
-                    action_text = "Press [E] to take the key"
+                    action_text = LANG.get("hud_press_take_key", "")
                 else:
                     nombre = getattr(looked_obj, 'name', 'Object')
-                    action_text = f"Press [E] to Inspect {nombre}"
+                    action_text = f"{LANG.get('hud_press_inspect', '')} {nombre}"
             else:
                 target_door = get_looked_at_door(setting_doors, house, camera)
                 if target_door:
                     if getattr(target_door, 'requires_key', False) and not getattr(camera, 'has_key', False):
-                        action_text = "Locked - Key required"
+                        action_text = LANG.get("hud_locked", "")
                     else:
                         is_open = getattr(target_door, 'is_open', False)
-                        action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
+                        action_text = LANG.get("hud_press_close", "") if is_open else LANG.get("hud_press_open", "")
 
         if safe_ui.active or portfolio_ui.active:
             action_text = None
@@ -1005,7 +1022,11 @@ def main():
     # UI Component Registration
     menu = MainMenu(screen_width, screen_height)
     safe_ui = SafeInterface() 
-    portfolio_ui = PortfolioInterface() 
+    portfolio_ui = PortfolioInterface()
+    
+    # Initialize language settings for UI components
+    safe_ui.update_language(LANG)
+    portfolio_ui.update_language(LANG)
     
     menu.is_fullscreen = saved_settings["is_fullscreen"]
     menu.volume = saved_settings["volume"]
@@ -1014,7 +1035,7 @@ def main():
     skybox = setup_skybox()
     
     debug_state = DebugState()
-    game_time = 15 * 60  
+    game_time = 1 * 60  
     
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
@@ -1055,6 +1076,28 @@ def main():
     while running:
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05) 
+        
+        if getattr(menu, 'language_changed', False):
+            lang_code = getattr(menu, 'language', 'en')
+            try:
+                with open(f"source/locales/{lang_code}.json", "r", encoding="utf-8") as f:
+                    new_lang_dict = json.load(f)
+            except Exception as e:
+                print(f"Error en hot-reload: {e}")
+                new_lang_dict = LANG
+                
+            LANG.clear()
+            LANG.update(new_lang_dict)
+            
+            TUTORIAL_TEXTS.clear()
+            TUTORIAL_TEXTS.extend([
+                LANG.get("tut_1", ""), LANG.get("tut_2", ""), LANG.get("tut_3", ""), LANG.get("tut_4", ""),
+                LANG.get("tut_5", ""), LANG.get("tut_6", ""), LANG.get("tut_7", ""), LANG.get("tut_8", "")
+            ])
+            safe_ui.update_language(new_lang_dict)
+            portfolio_ui.update_language(new_lang_dict)
+            pygame.display.set_caption(LANG.get("window_title", "Evidence - Resolve the Mystery"))
+            menu.language_changed = False
 
         if menu.state == 'RESTART':
             render_loading_screen(camera.width, camera.height, duration=0.8, start_progress=0.0, target_progress=0.85)
@@ -1078,11 +1121,14 @@ def main():
             
             for door in setting_doors:
                 door.is_open = False
-                if hasattr(door, 'current_angle'):
-                    door.current_angle = 0.0 
-                if getattr(door, 'is_safe', False):
+                
+                door.angle = 0.0 
+                door.target = 0.0
+                
+                if getattr(door, 'is_safe', False): 
                     door.is_locked = True
-                if getattr(door, 'mat', '') == "matPuerta7":
+                
+                if getattr(door, 'mat', '') == "matPuerta6": 
                     door.requires_key = True
             
             render_loading_screen(camera.width, camera.height, duration=0.4, start_progress=0.85, target_progress=1.0)
@@ -1109,7 +1155,7 @@ def main():
             menu.state = 'CINEMATIC'
             cinematic.started_game = True
             cinematic.active = True
-            cinematic.camera_lerp = 0.0
+            cinematic.current_lerp = 0.0
             cinematic.text_index = 0
             
             camera.pos_x = 0.0
