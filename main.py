@@ -1035,7 +1035,7 @@ def main():
     skybox = setup_skybox()
     
     debug_state = DebugState()
-    game_time = 1 * 60  
+    game_time = 15 * 60  
     
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 

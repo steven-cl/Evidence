@@ -104,7 +104,7 @@ class Model3D:
             # --- AUTOMATED BOUNDING BOX GENERATION FOR STANDALONE PROPS ---
             FURNITURE_KEYWORDS = [
                 "lamp", "mesa", "comedor", "sofa", "sillon", "cama", "silla", "horno",
-                "basec", "colchon", "almohada", "sillo", "cojin",
+                "basec", "colchon", "almohada", "sillo", "cojin", "pilar",
                 "limite", "hueso", "organos", "detalles", "machete",
                 "mangomachete", "cadaver", "cuerpop", "cruz", "head", "hands", "hair"
             ]
@@ -179,10 +179,10 @@ class Model3D:
             if is_ignored_prop:
                 continue
 
-            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stair", "pilar"]
+            STRUCTURAL_KEYWORDS = ["pared", "piso", "techo", "puerta", "marco", "psotano", "stair"]
             is_structural = any(kw in name.lower() for kw in STRUCTURAL_KEYWORDS)
 
-            INVERTIR_NORMALES = ["matpsotano", "matpilar", "psotano", "pilar"]
+            INVERTIR_NORMALES = ["matpsotano", "psotano"]
             DOBLE_CARA = ["stair"]
 
             for i in range(0, len(v), stride * 3):
