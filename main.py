@@ -2,19 +2,18 @@ import os
 import json
 from time import sleep
 import pygame
-import random
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from audio_manager import AudioManager
 import glm   
 
-
 # Import internal gameplay modules
 from menu import MainMenu
 from camera import CameraFPS
 from skybox import Skybox
 from safe_interface import SafeInterface
+from portfolio_interface import PortfolioInterface 
 from load_screen import render_loading_screen
 from scene_loader import (
     load_scene_assets,
@@ -29,6 +28,20 @@ from scene_loader import (
 )
 
 # =============================================================================
+# --- NARRATIVE & LORE ---
+# =============================================================================
+
+NOTE_TEXTS = {
+    "matnota": "The house was abandoned for a long time, how could someone live in such precarious conditions, unless life is the last thing of value here.",
+    "matnotab": "DollMaker usually checks his watch 4 times while torturing his victims, a man obsessed with time never lives in peace.",
+    "matnotac": "You could try entering the numbers in ascending order.",
+    "matnotad": "Time is a silent killer, maybe this time it will help you catch one.",
+    "matnotae": "I woke up early today, had breakfast very calmly knowing that I gave all of them the eternity and beauty of a doll.",
+    "matnotaf": "At first they are usually noisy, but once they realize I did them a favor they stop complaining. I guess it's part of them sharing their happiness with me.",
+    "matnota2": "How I love them, I have them all with me, I don't need anything else. I don't care if the world ends tomorrow, as long as I have them, I'll be fine."
+}
+
+# =============================================================================
 # --- PERSISTENCE ENGINE (SAVING) ---
 # =============================================================================
 
@@ -40,7 +53,7 @@ def load_settings():
     If no file is found, returns default fallback values.
     """
     default_settings = {
-        "width": 0,          # 0 indicates "Not configured, default to maximized"
+        "width": 0,          
         "height": 0,
         "is_fullscreen": False,
         "volume": 80
@@ -76,22 +89,17 @@ def save_settings(camera, menu):
 
 class DebugState:
     """
-    Manages the toggle states for various on-screen debugging tools 
-    available to the developer during runtime.
+    Manages the toggle states for various on-screen debugging tools.
     """
     def __init__(self):
-        self.overlay = False   # F1: Bounding boxes and physics spheres
-        self.hud = False       # F2: On-screen telemetry text overlay (FPS, coordinates)
-        self.wireframe = False # F3: Global wireframe polygon rendering mode
+        self.overlay = False   
+        self.hud = False       
+        self.wireframe = False 
 
 _debug_font = None
 _ui_font = None
 
 def init_fonts():
-    """
-    Initializes global Pygame fonts used for rendering the UI and debugging overlays.
-    Uses fallback standard fonts if the requested system fonts are unavailable.
-    """
     global _debug_font, _ui_font
     if _debug_font is None:
         pygame.font.init()
@@ -103,9 +111,6 @@ def init_fonts():
             _ui_font = pygame.font.Font(None, 28)
 
 def init_debug_font():
-    """
-    Initializes specifically the debug font instance if not already loaded.
-    """
     global _debug_font
     if _debug_font is None:
         pygame.font.init()
@@ -115,10 +120,6 @@ def init_debug_font():
             _debug_font = pygame.font.Font(None, 24)
 
 def draw_debug_text(x, y, text, color=(0, 255, 0)):
-    """
-    Renders simple unshadowed text to an OpenGL 2D quad for debugging purposes.
-    Generates a texture from a Pygame surface on the fly.
-    """
     init_debug_font()
     text_surface = _debug_font.render(text, True, color)
     w, h = text_surface.get_size()
@@ -149,11 +150,6 @@ def draw_debug_text(x, y, text, color=(0, 255, 0)):
 def create_shadowed_text_texture(text, font, color):
     """
     Creates an OpenGL texture from a Pygame surface containing text with a drop shadow effect.
-    Improves UI readability against complex 3D backgrounds.
-    
-    Returns:
-        tex_id: The OpenGL texture ID.
-        cw, ch: The width and height of the generated texture.
     """
     main_surf = font.render(text, True, color)
     shadow_surf = font.render(text, True, (10, 10, 10)) 
@@ -176,11 +172,11 @@ def create_shadowed_text_texture(text, font, color):
     
     return tex_id, cw, ch
 
-def draw_game_ui(width, height, remaining_time, action_text=None, notification_text=None):
+def draw_game_ui(width, height, remaining_time, action_text=None, notification_text=None, portfolio_ui=None):
     """
     Renders the main gameplay heads-up display (HUD).
     Draws the pause reminder, countdown timer, central crosshair interaction text, 
-    and system notifications (like collecting keys) using Orthographic projection.
+    and system notifications using Orthographic projection.
     """
     init_fonts()
     
@@ -220,7 +216,6 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
     seconds = max(0, int(remaining_time) % 60)
     timer_text = f"{minutes:02d}:{seconds:02d}"
     
-    # Turn timer red if there are 3 minutes (180 seconds) or less remaining
     timer_color = (255, 60, 60) if remaining_time < 180.0 else (240, 240, 240)
     tex_t, w_t, h_t = create_shadowed_text_texture(timer_text, _ui_font, timer_color)
     x_pos_timer = width - w_t - 25
@@ -248,9 +243,9 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
         glEnd()
         glDeleteTextures([tex_i])
 
-    # 4. NOTIFICATION INDICATOR (For Key Collection)
+    # 4. NOTIFICATION INDICATOR
     if notification_text:
-        tex_n, w_n, h_n = create_shadowed_text_texture(notification_text, _ui_font, (255, 255, 100)) # Yellowish text
+        tex_n, w_n, h_n = create_shadowed_text_texture(notification_text, _ui_font, (255, 255, 100))
         x_pos_notif = (width - w_n) // 2
         y_pos_notif = 80 
         glBindTexture(GL_TEXTURE_2D, tex_n)
@@ -261,6 +256,53 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
         glTexCoord2f(0, 1); glVertex2f(x_pos_notif, y_pos_notif + h_n)
         glEnd()
         glDeleteTextures([tex_n])
+
+    # 5. PORTFOLIO INDICATOR (Bottom Right)
+    if portfolio_ui and portfolio_ui.tex_portfolio is not None:
+        icon_w, icon_h = 130, 110
+        icon_x = width - icon_w - 25
+        icon_y = height - icon_h - 25
+        
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, portfolio_ui.tex_portfolio)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 1); glVertex2f(icon_x, icon_y)
+        glTexCoord2f(1, 1); glVertex2f(icon_x + icon_w, icon_y)
+        glTexCoord2f(1, 0); glVertex2f(icon_x + icon_w, icon_y + icon_h)
+        glTexCoord2f(0, 0); glVertex2f(icon_x, icon_y + icon_h)
+        glEnd()
+        
+        try:
+            # Times New Roman y Georgia comparten los "patines" visuales de Courier, 
+            # pero su 'Q' tiene la curva que nace desde el interior.
+            q_font = pygame.font.SysFont("times new roman, georgia, serif", 26, bold=True)
+        except:
+            q_font = _ui_font
+            
+        # Tinta negra pura sin sombra
+        q_surf = q_font.render("[Q]", True, (15, 15, 15)) 
+        w_q, h_q = q_surf.get_size()
+        q_data = pygame.image.tobytes(q_surf, "RGBA", False)
+        
+        tex_q = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_q)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w_q, h_q, 0, GL_RGBA, GL_UNSIGNED_BYTE, q_data)
+        
+        q_x = icon_x + (icon_w - w_q) // 2
+        q_y = icon_y + (icon_h - h_q) // 2
+        
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+        glBindTexture(GL_TEXTURE_2D, tex_q)
+        glBegin(GL_QUADS)
+        glTexCoord2f(0, 0); glVertex2f(q_x, q_y)
+        glTexCoord2f(1, 0); glVertex2f(q_x + w_q, q_y)
+        glTexCoord2f(1, 1); glVertex2f(q_x + w_q, q_y + h_q)
+        glTexCoord2f(0, 1); glVertex2f(q_x, q_y + h_q)
+        glEnd()
+        glDeleteTextures([tex_q])
     
     glDisable(GL_TEXTURE_2D)
     glDisable(GL_BLEND)
@@ -274,8 +316,7 @@ def draw_game_ui(width, height, remaining_time, action_text=None, notification_t
 
 def draw_crosshair(width, height):
     """
-    Renders a stylized crosshair in the center of the screen using basic OpenGL primitives.
-    It consists of an inner shadow and an outer bright layer to remain visible on both dark and bright backgrounds.
+    Renders a stylized crosshair in the center of the screen.
     """
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
@@ -297,10 +338,10 @@ def draw_crosshair(width, height):
     cx = width // 2
     cy = height // 2
     
-    t = 1.0  # Thickness
-    s = 8.0  # Length
-    g = 4.0  # Gap from center
-    o = 1.5  # Outline offset
+    t = 1.0  
+    s = 8.0  
+    g = 4.0  
+    o = 1.5  
     
     def draw_rect(x1, x2, y1, y2):
         glBegin(GL_QUADS)
@@ -308,14 +349,12 @@ def draw_crosshair(width, height):
         glVertex2f(x2, y2); glVertex2f(x1, y2)
         glEnd()
     
-    # Draw shadow outlines
     glColor4f(0.0, 0.0, 0.0, 0.85) 
     draw_rect(cx - g - s - o, cx - g + o, cy - t - o, cy + t + o)
     draw_rect(cx + g - o, cx + g + s + o, cy - t - o, cy + t + o)
     draw_rect(cx - t - o, cx + t + o, cy - g - s - o, cy - g + o)
     draw_rect(cx - t - o, cx + t + o, cy + g - o, cy + g + s + o)
     
-    # Draw main bright crosshair
     glColor4f(1.0, 1.0, 1.0, 0.95)
     draw_rect(cx - g - s, cx - g, cy - t, cy + t)
     draw_rect(cx + g, cx + g + s, cy - t, cy + t)
@@ -335,7 +374,6 @@ def draw_crosshair(width, height):
 def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
     """
     Renders physical bounds, collision spheres, and wireframes when debug mode is active.
-    Helps developers visualize what the physics engine is calculating vs what is visually rendered.
     """
     glDisable(GL_TEXTURE_2D)
     glDisable(GL_LIGHTING)
@@ -345,7 +383,6 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
     glLineWidth(1.5)
 
-    # Draw environmental collision triangles
     glColor3f(0.0, 1.0, 0.0) 
     glBegin(GL_TRIANGLES)
     for tri in house.colliders:
@@ -360,7 +397,6 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
             glVertex3f(tri.c.x, tri.c.y, tri.c.z)
     glEnd()
 
-    # Draw player bounding spheres
     if hasattr(camera, 'feet_pos'):
         glColor3f(1.0, 0.0, 0.0) 
         quadric = gluNewQuadric()
@@ -379,7 +415,6 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
         gluDeleteQuadric(quadric)
         glColor3f(1.0, 1.0, 1.0)
 
-    # Restore polygon rendering modes based on state
     if is_wireframe_global:
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
     else:
@@ -392,7 +427,6 @@ def draw_debug_visuals(camera, house, setting_doors, is_wireframe_global):
 def setup_fog(density):
     """
     Configures global OpenGL exponential fog parameters to create an atmospheric mystery effect.
-    The fog density limits visibility and helps mask draw distance limitations.
     """
     glEnable(GL_FOG)
     glFogi(GL_FOG_MODE, GL_EXP2)
@@ -402,55 +436,43 @@ def setup_fog(density):
     glHint(GL_FOG_HINT, GL_NICEST)
     
 def setup_advanced_lighting():
+    """
+    Initializes advanced OpenGL lighting with custom attenuation parameters 
+    to prevent light from bleeding through walls in adjacent rooms.
+    """
     glEnable(GL_LIGHTING)
     glEnable(GL_COLOR_MATERIAL)
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
     glShadeModel(GL_SMOOTH)
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.15, 0.15, 0.15, 1.0])
     
-  
     # Lamp1
-    
     glEnable(GL_LIGHT0)
     glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 0.9, 0.8, 1.0]) 
     glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-    
-    # NUEVO: Atenuación agresiva para que no traspase la pared
     glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
     glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.22)      
     glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.20)   
 
-    
-    #Lamp2
-   
+    # Lamp2
     glEnable(GL_LIGHT1)
-    
     dim_diffuse = [0.2, 0.10, 0.12, 1.0]
     dim_specular = [0.3, 0.3, 0.3, 1.0]
-    
     glLightfv(GL_LIGHT1, GL_DIFFUSE, dim_diffuse) 
     glLightfv(GL_LIGHT1, GL_SPECULAR, dim_specular)
-    
-    # NUEVO: Atenuación agresiva
     glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 1.0)
     glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.22)
     glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.20)
 
-   
     # Lamp3
-  
     glEnable(GL_LIGHT2)
     glLightfv(GL_LIGHT2, GL_SPECULAR, [0.5, 0.5, 0.5, 1.0])
-    
-    # NUEVO: Atenuación agresiva
     glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 1.0)
     glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.22)
     glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.20)
-    
+
 def setup_display():
-    
     os.environ['SDL_VIDEO_CENTERED'] = "mouse"
-    
     pygame.init()
     
     settings = load_settings()
@@ -473,10 +495,6 @@ def setup_display():
     return screen_width, screen_height, settings
 
 def setup_camera(screen_width, screen_height):
-    """
-    Instantiates the standard FPS interaction camera with initial transform look parameters
-    and gameplay variables (inventory, timers).
-    """
     camera = CameraFPS(screen_width, screen_height)
     camera.configure_projection()
     
@@ -488,16 +506,13 @@ def setup_camera(screen_width, screen_height):
 
     # Variables for inventory and notifications
     camera.has_key = False
-    camera.key_message_timer = 0.0
+    camera.notification_timer = 0.0
+    camera.notification_message = ""
 
     camera.update_camera_vectors()
     return camera
 
 def setup_skybox():
-    """
-    Maps architectural asset texturing locations to instantiate the environmental Skybox
-    that surrounds the 3D map bounds.
-    """
     skybox_paths = {
         'posz': 'source/textures/posz.jpg',
         'posx': 'source/textures/posx.jpg',
@@ -508,10 +523,10 @@ def setup_skybox():
     }
     return Skybox(skybox_paths)
 
-def process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui):
+def process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui):
     """
-    Handles core gameplay input events, specifically object inspection, door interaction, 
-    and triggering of debug modes. Returns the currently inspected object.
+    Handles core gameplay input events, specifically object inspection, note collection, 
+    door interaction, and triggering of debug modes. Returns the currently inspected object.
     """
     if event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
@@ -519,29 +534,24 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
             audio.play_sfx("ui_click")
         elif event.key == pygame.K_e:
             if inspected_object:
-                # Drop the object currently being inspected
                 inspected_object.reset_rotation()
                 inspected_object = None
             else:
                 grabbed = False
                 looked_obj = None
-                
-                # Check for collision against all inspectable items in the world
                 for obj in setting_inspectables:
                     if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
                         
-                        # Block key interaction if the safe is closed
                         if getattr(obj, 'name', '') == 'Key':
                             safe_door = next((d for d in setting_doors if getattr(d, 'is_safe', False)), None)
                             if safe_door and not getattr(safe_door, 'is_open', False):
-                                continue # Pretend the key is not there and keep scanning
+                                continue 
                                 
                         looked_obj = obj
 
                         obj_name = getattr(obj, 'name', '').lower()
                         obj_mats = "".join(getattr(obj, 'mat_names', [])).lower()
 
-                        # TRIGGER: Detect object type name to play specific environmental SFX
                         if "botella" in obj_name or "glass" in obj_name or "botella" in obj_mats:
                             audio.play_sfx("inspect_glass")
                         elif "papel" in obj_name or "paper" in obj_name or "nota" in obj_name or "nota" in obj_mats:
@@ -549,21 +559,47 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                         elif "machete" in obj_name or "knife" in obj_name or "machete" in obj_mats:
                             audio.play_sfx("inspect_knife")
                         else:
-                            audio.play_sfx("ui_click") # Default fallback
+                            audio.play_sfx("ui_click") 
                         break
                 
                 if looked_obj:
-                    # If the object is the key, collect it instead of opening the inspection UI
                     if getattr(looked_obj, 'name', '') == 'Key':
                         camera.has_key = True
-                        camera.key_message_timer = 3.0 # Show text for 3 seconds
-                        setting_inspectables.remove(looked_obj) # Remove from world geometry
+                        camera.notification_timer = 3.0
+                        camera.notification_message = "You have taken the key"
+                        setting_inspectables.remove(looked_obj) 
                         grabbed = True
                     else:
-                        inspected_object = looked_obj
-                        grabbed = True
+                        obj_name = getattr(looked_obj, 'name', '').lower()
+                        obj_mats = [m.lower() for m in getattr(looked_obj, 'mat_names', [])]
+                        
+                        # Note recognition logic
+                        is_note = False
+                        note_id = "matnota" # Fallback mapping
+                        
+                        if "nota" in obj_name:
+                            is_note = True
+                            
+                        for m in obj_mats:
+                            if "nota" in m:
+                                is_note = True
+                                note_id = m
+                                break
+                                
+                        if is_note:
+                            # Transfer to portfolio array and remove from world
+                            text = NOTE_TEXTS.get(note_id, "Illegible text...")
+                            portfolio_ui.add_note(text)
+                            audio.play_sfx("inspect_paper")
+                            camera.notification_timer = 3.0
+                            camera.notification_message = "Note added to Portfolio"
+                            setting_inspectables.remove(looked_obj)
+                            grabbed = True
+                        else:
+                            # Regular 3D item inspection
+                            inspected_object = looked_obj
+                            grabbed = True
                 
-                # If no object was grabbed, attempt to interact with doors
                 if not grabbed:
                     toggle_nearest_visible_door(setting_doors, house, camera, audio, safe_ui)
             
@@ -585,16 +621,15 @@ def process_game_event(event, menu, camera, setting_doors, house, debug_state, s
                 
     return inspected_object
 
-def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui):
+def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui):
     """
     Main event routing function. Dispatches Pygame window inputs to the active UI state
-    (Menu, Safe interface, or Gameplay physics).
+    (Menu, Safe interface, Portfolio UI, or Gameplay physics).
     """
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False, inspected_object
 
-        # Handle dynamic window resizing
         if event.type == pygame.VIDEORESIZE:
             glViewport(0, 0, event.w, event.h)
             camera.width = event.w
@@ -607,15 +642,33 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
             menu.center_y = event.h // 2
             menu.options_start_y = menu.center_y + 20
 
-        # Route inputs to menu systems
         if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']:
+            
+            # --- FIX: Prevent ESC from closing the game in the Main Menu ---
+            # Acts as an "Unpause" button to seamlessly return to the action
+            if menu.state == 'MENU' and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                menu.state = 'GAME'
+                if audio: audio.play_sfx("ui_click")
+                continue
+            # ---------------------------------------------------------------
+            
             menu.handle_input(event, camera, audio)
             
             if menu.state == 'QUIT':
                 return False, inspected_object
                 
         elif menu.state == 'GAME':
-            # Route input to Safe UI if active, suppressing normal movement/look
+            
+            # --- GLOBAL PORTFOLIO HOTKEY ---
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                # Disallow opening portfolio if interacting with the safe
+                if not safe_ui.active: 
+                    portfolio_ui.active = not portfolio_ui.active
+                    if portfolio_ui.active:
+                        audio.play_sfx("inspect_paper")
+                    continue # Bypass event processing for this frame
+
+            # Route input to UI
             if safe_ui.active:
                 unlocked = safe_ui.handle_event(event, audio)
                 if unlocked:
@@ -624,27 +677,26 @@ def handle_events(menu, camera, setting_doors, house, debug_state, setting_inspe
                             door.is_locked = False
                             door.toggle() 
                             audio.play_sfx("safe_open")
+            elif portfolio_ui.active:
+                portfolio_ui.handle_event(event, audio)
             else:
-                # Process standard game physics and interaction
-                inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui)
+                inspected_object = process_game_event(event, menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui)
         
-    # Real-time dynamic volume tracking during settings adjustments
     if menu.state == 'OPTIONS':
         audio.set_volume(menu.volume)
 
     return True, inspected_object
 
-def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, current_fog_density, audio, setting_inspectables, inspected_object, safe_ui):
+def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door_materials, dt, clock, debug_state, game_time, house_display_list, static_colliders, current_fog_density, audio, setting_inspectables, inspected_object, safe_ui, portfolio_ui):
     """
     Executes specific screen clear procedures and orchestrates the rendering of UI matrices 
-    or 3D spatial geometry depending on the active game state. Also handles physics integration steps.
+    or 3D spatial geometry depending on the active game state.
     """
     _updated_density = current_fog_density
     glClearColor(0.25, 0.26, 0.30, 1.0)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     
-    # Manage mouse capture state (free mouse for UI, locked cursor for FPS gameplay)
-    needs_mouse_visible = (menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']) or safe_ui.active
+    needs_mouse_visible = (menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']) or safe_ui.active or portfolio_ui.active
     
     if getattr(camera, 'mouse_visible_state', None) != needs_mouse_visible:
         if needs_mouse_visible:
@@ -655,14 +707,12 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             pygame.mouse.set_visible(False)
         camera.mouse_visible_state = needs_mouse_visible
 
-    # Render Active Menu States
     if menu.state in ['MENU', 'OPTIONS', 'GAME_OVER']:
         pygame.event.set_grab(False)
         pygame.mouse.set_visible(True)
         menu.render()
     else:
-        # Render Gameplay State
-        if safe_ui.active:
+        if safe_ui.active or portfolio_ui.active:
             pygame.event.set_grab(False)
             pygame.mouse.set_visible(True)
         else:
@@ -671,25 +721,22 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         
         dx, dy = pygame.mouse.get_rel()
         
-        # Apply mouse deltas to camera rotation or object inspection rotation
-        if not safe_ui.active:
+        if not safe_ui.active and not portfolio_ui.active:
             if inspected_object:
                 inspected_object.rot_y += dx * 0.5
                 inspected_object.rot_x += dy * 0.5
             else:
                 camera.process_mouse(dx, dy)
         
-        # SPATIAL PARTITIONING: 3D GRID-BASED COLLISION CULLING
+        # SPATIAL PARTITIONING
         CELL_SIZE = 2.0 
 
-        # Identify the 3D grid cell currently occupied by the player
         cell_x = int(camera.pos_x // CELL_SIZE)
         cell_y = int(camera.pos_y // CELL_SIZE)
         cell_z = int(camera.pos_z // CELL_SIZE)
 
         nearby_triangles = set()
 
-        # Query the current cell and the 26 surrounding 3D cells (27 cells total, 3x3x3 block)
         for x in range(cell_x - 1, cell_x + 2):
             for y in range(cell_y - 1, cell_y + 1):
                 for z in range(cell_z - 1, cell_z + 2):
@@ -702,23 +749,18 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
         for door in setting_doors:
             frame_colliders.extend(door.get_transformed_triangles(house))
 
-        # Dynamic fog transitions based on courtyard boundaries coordinates (outdoor vs indoor)
         if (camera.pos_z < -5.8) or (camera.pos_z > 4.0) or (camera.pos_x < -8.5) or (camera.pos_x > 3.8):
-            # Player is standing in the outside courtyard (Thinner fog)
             target_density = 0.1
         else:
-            # Player is inside the building geometry limits (Thicker fog)
             target_density = 0.17
 
         interpolation_speed = 1.8
         _updated_density = current_fog_density + (target_density - current_fog_density) * interpolation_speed * dt
 
-        # Process movement keyboard layout
         keys = pygame.key.get_pressed()
         is_moving = keys[pygame.K_w] or keys[pygame.K_s] or keys[pygame.K_a] or keys[pygame.K_d]
         
-        # EXECUTE PHYSICS PASS EXCLUSIVELY ON LOCALIZED CULLED COLLIDERS
-        if not inspected_object and not safe_ui.active:
+        if not inspected_object and not safe_ui.active and not portfolio_ui.active:
             camera.process_keyboard(dt, frame_colliders)
         
         # Phase 1: Render Skybox (Requires depth test off so it draws infinitely far away)
@@ -734,83 +776,63 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             camera.front_x, camera.front_y, camera.front_z,
             0.0, 1.0, 0.0,
         )
-  
+        
         glDisable(GL_LIGHTING) 
         skybox.draw()
 
         # Phase 2: Render 3D World Geometry
         glEnable(GL_DEPTH_TEST)
-        glEnable(GL_FOG)
         glEnable(GL_LIGHTING)
         camera.update_view()
         
-        #lamps
-        
-        # Lamp
+        # Lamp 1
         lamp_position_1 = [-0.351, 2.6602, 2.1109, 1.0] 
         glLightfv(GL_LIGHT0, GL_POSITION, lamp_position_1)
         
-        #lamp2
+        # Lamp 2
         lamp_position_2 = [-6.6994, 2.6715, 2.1109, 1.0] 
         glLightfv(GL_LIGHT1, GL_POSITION, lamp_position_2)
 
-        # Lamp3
-        #if random.random() < 0.15: 
-            #intensity = random.uniform(0.0, 0.1) 
-        #else:
-            #intensity = random.uniform(0.6, 0.9) 
-            
-        #Intensity
-        #flicker_color = [intensity, intensity * 0.5, intensity * 0.5, 1.0]
-        #glLightfv(GL_LIGHT2, GL_DIFFUSE, flicker_color)
-        
+        # Lamp 3
         lamp_position_3 = [2.8231, -0.031169, -2.6032, 1.0]
         glLightfv(GL_LIGHT2, GL_POSITION, lamp_position_3)
 
-        
-
         update_doors(setting_doors, dt)
 
-        # Process notifications
-        if camera.key_message_timer > 0:
-            camera.key_message_timer -= dt
-            notification_text = "You have taken the key"
+        # Dynamic Notification Tracker
+        if camera.notification_timer > 0:
+            camera.notification_timer -= dt
+            notification_text = camera.notification_message
         else:
             notification_text = None
 
-        # Track auditory pacing steps
         is_grounded = getattr(camera, 'is_grounded', True)
         audio.update_footsteps(dt, is_moving, is_grounded)
 
-        # Calculate object inspection lookat rays
         action_text = None
         looked_obj = None
         
         if inspected_object:
             action_text = "Press [E] to Drop"
         else:
-            # Scan inspectable items
             for obj in setting_inspectables:
                 if obj.can_be_inspected(camera.pos_x, camera.pos_y, camera.pos_z, camera.front_x, camera.front_y, camera.front_z):
                     
-                    # Block key text prompt if safe is closed
                     if getattr(obj, 'name', '') == 'Key':
                         safe_door = next((d for d in setting_doors if getattr(d, 'is_safe', False)), None)
                         if safe_door and not getattr(safe_door, 'is_open', False):
-                            continue # Ignore the key and keep scanning
+                            continue 
                             
                     looked_obj = obj
                     break
             
             if looked_obj:
-                # Provide custom text string for the Key
                 if getattr(looked_obj, 'name', '') == 'Key':
                     action_text = "Press [E] to take the key"
                 else:
                     nombre = getattr(looked_obj, 'name', 'Object')
                     action_text = f"Press [E] to Inspect {nombre}"
             else:
-                # If no object was looked at, scan nearby doors
                 target_door = get_looked_at_door(setting_doors, house, camera)
                 if target_door:
                     if getattr(target_door, 'requires_key', False) and not getattr(camera, 'has_key', False):
@@ -819,30 +841,24 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
                         is_open = getattr(target_door, 'is_open', False)
                         action_text = "Press [E] to Close" if is_open else "Press [E] to Open"
 
-        # Suppress interaction text if Safe UI is blocking the view
-        if safe_ui.active:
+        if safe_ui.active or portfolio_ui.active:
             action_text = None
 
-        # Execute unified graphics world render pass
         try:
-            # Render static mapped geometry from VRAM display list
             glCallList(house_display_list)
-            # Render dynamic elements (inspectables, doors, UI popups)
             draw_inspectables_world(setting_inspectables, inspected_object, house, config_visual, looked_obj)
             draw_doors(setting_doors, house, config_visual)
             draw_inspected_hud(inspected_object, house, config_visual)
         except OpenGL.error.Error:
             pass 
         
-        # Render 2D Orthographic Overlays on top of the 3D projection matrix scene viewport
         draw_crosshair(camera.width, camera.height)
-        draw_game_ui(camera.width, camera.height, game_time, action_text, notification_text)
+        
+        draw_game_ui(camera.width, camera.height, game_time, action_text, notification_text, portfolio_ui)
 
-        # Render Diagnostics Graphics Visual Overlay (F1)
         if debug_state.overlay:
             draw_debug_visuals(camera, house, setting_doors, debug_state.wireframe)
 
-        # Render Telemetry HUD Overlay (F2)
         if debug_state.hud:
             current_fps = clock.get_fps()
             state_str = "GROUNDED" if camera.is_grounded else "JUMPING/FALLING"
@@ -862,12 +878,13 @@ def render_frame(menu, camera, skybox, house, config_visual, setting_doors, door
             
             glEnable(GL_FOG); glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix()
 
-        # Update and render the digital Safe Interface on top of everything
         safe_ui.update(dt)
         if safe_ui.active:
             safe_ui.draw(camera.width, camera.height)
+            
+        if portfolio_ui.active:
+            portfolio_ui.draw(camera.width, camera.height)
 
-    # Swap the display buffers
     pygame.display.flip()
     return _updated_density
 
@@ -881,7 +898,6 @@ def main():
 
     current_fog_density = 0.04
 
-    # Initialize Audio Subsystem and preload sound effects
     audio = AudioManager()
     audio.set_volume(saved_settings["volume"])
 
@@ -907,16 +923,15 @@ def main():
         tension_timer_snd = pygame.mixer.Sound("source/audio/sfx/timer.wav")
     except Exception as e:
         tension_timer_snd = None
-        print("Error when pre-charge timer:", e)
-    
-    # Start the ambient menu music loop
+        print("Error al pre-cargar timer:", e)
+        
     audio.play_ambient_music("menu.mp3", loops=-1)
     
-    # Initialize Core UI Interfaces
+    # UI Component Registration
     menu = MainMenu(screen_width, screen_height)
     safe_ui = SafeInterface() 
+    portfolio_ui = PortfolioInterface() 
     
-    # Apply previously saved UI configurations
     menu.is_fullscreen = saved_settings["is_fullscreen"]
     menu.volume = saved_settings["volume"]
     
@@ -924,32 +939,26 @@ def main():
     skybox = setup_skybox()
     
     debug_state = DebugState()
-    game_time = 15 * 60  # 15 minutes detective exploration session timer limit
+    game_time = 15 * 60  
     
-    # Render loading screen to cover map compilation hitches
     render_loading_screen(screen_width, screen_height, duration=1.5, start_progress=0.0, target_progress=0.85)
 
     glEnable(GL_DEPTH_TEST)
     setup_fog(current_fog_density)
-    setup_advanced_lighting() # <--- ACTIVA LAS LUCES AQUÍ
+    setup_advanced_lighting()
     
     pygame.event.set_blocked(None)
 
-    # Load 3D map data, material sets, and interactive entity states
     house, config_visual, setting_doors, door_materials, setting_inspectables, inspectable_materials = load_scene_assets()
     
-    # Retain a baseline copy to restore upon level restart without hitting RAM/VRAM
     original_inspectables = list(setting_inspectables)
     static_colliders = list(house.colliders)
     
-    # --- RENDER OPTIMIZATION: OPENGL DISPLAY LISTS ---
-    # Compile the static geometry of the house directly into VRAM to drastically reduce draw calls
     house_display_list = glGenLists(1)
     glNewList(house_display_list, GL_COMPILE)
     draw_static_model(house, config_visual, door_materials, inspectable_materials)
     glEndList()
     
-    # Complete loading sequence and flush queued up events
     render_loading_screen(screen_width, screen_height, duration=0.4, start_progress=0.85, target_progress=1.0)
     pygame.event.set_allowed(None) 
     pygame.event.clear() 
@@ -958,41 +967,37 @@ def main():
     running = True
     inspected_object = None
 
-    # Fetch reference to the specific door that ends the game condition
     basement_door = next((d for d in setting_doors if getattr(d, 'mat', '') == "matPuerta6"), None)
     
-    # Execution state trackers
     game_over_timer = 0.0
     game_over_phase = 0
     tension_triggered = False
     timer_channel = None
     last_state = 'MENU'
 
-    # --- MAIN EXECUTION LOOP ---
     while running:
-        # Cap logic loop at ~60hz / Protect delta time during loading pauses
         dt = clock.tick(60) / 1000.0
         dt = min(dt, 0.05) 
 
-        # Intercept and process game restarts from the UI
         if menu.state == 'RESTART':
             render_loading_screen(camera.width, camera.height, duration=0.8, start_progress=0.0, target_progress=0.85)
             
-            # Reset gameplay variables
             game_time = 15 * 60  
             camera.has_key = False
-            camera.key_message_timer = 0.0
+            camera.notification_timer = 0.0
             inspected_object = None
             
-            # Flush safe UI
             safe_ui.active = False
             safe_ui.input_buffer = ""
             safe_ui.error_timer = 0.0
             
-            # Restore inspectable items list from backup
+            # --- CLEAR PORTFOLIO PROGRESS ON DEATH ---
+            portfolio_ui.active = False
+            portfolio_ui.collected_notes.clear()
+            portfolio_ui.current_page = 0
+            
             setting_inspectables = list(original_inspectables)
             
-            # Close and manually relock all map doors
             for door in setting_doors:
                 door.is_open = False
                 if hasattr(door, 'current_angle'):
@@ -1004,11 +1009,9 @@ def main():
             
             render_loading_screen(camera.width, camera.height, duration=0.4, start_progress=0.85, target_progress=1.0)
             
-            # Clear state switches
             menu.state = 'GAME'
             pygame.event.clear()
             
-            # Revert tension music and initialize default environment audio
             pygame.mixer.music.stop() 
             if timer_channel:
                 timer_channel.stop()
@@ -1019,18 +1022,14 @@ def main():
             game_over_timer = 0.0
             last_state = 'GAME'
 
-        # Poll operating system window events
         pygame.event.pump()
-        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui)
+        running, inspected_object = handle_events(menu, camera, setting_doors, house, debug_state, setting_inspectables, inspected_object, audio, safe_ui, portfolio_ui)
         
-        # Audio state transitions based on menu activity
         if last_state != menu.state:
-            # Entering menus
             if menu.state == 'MENU' and last_state == 'GAME':
                 audio.play_ambient_music("menu.mp3", loops=-1)
                 if timer_channel:
                     timer_channel.pause()
-            # Returning to game
             elif menu.state == 'GAME' and last_state in ['MENU', 'OPTIONS']:
                 if tension_triggered:
                     audio.play_ambient_music("few_time.mp3", loops=-1)
@@ -1041,27 +1040,20 @@ def main():
 
         last_state = menu.state
 
-        # Active gameplay physics and time progression logic
         if running and menu.state == 'GAME':
-            # Stop the countdown if the win condition door is unlocked
             running_time = getattr(basement_door, 'requires_key', True) if basement_door else True
             
             if running_time:
                 game_time -= dt
                 
-                # --- TENSION EVENT: 3 minutes left ---
                 if game_time <= 180.0 and not tension_triggered:
                     tension_triggered = True
                     audio.play_ambient_music("few_time.mp3", loops=-1)
                     
-                    try:
-                        timer_snd = pygame.mixer.Sound("source/audio/sfx/timer.wav") 
-                        timer_snd.set_volume(menu.volume / 100.0)
-                        timer_channel = timer_snd.play(loops=-1)
-                    except Exception as e:
-                        print("Error al cargar timer:", e)
+                    if tension_timer_snd:
+                        tension_timer_snd.set_volume(menu.volume / 100.0)
+                        timer_channel = tension_timer_snd.play(loops=-1)
 
-                # --- GAME OVER EVENT: Time depleted ---
                 if game_time <= 0.0:
                     game_time = 0.0
                     menu.state = 'GAME_OVER'
@@ -1075,8 +1067,6 @@ def main():
                     game_over_timer = 1.0 
                     game_over_phase = 1   
         
-        # Asynchronous audio sequencer for the Game Over screen
-        # Runs without blocking the main rendering loop
         if menu.state == 'GAME_OVER' and game_over_phase > 0:
             game_over_timer -= dt 
             
@@ -1089,18 +1079,16 @@ def main():
                 elif game_over_phase == 2:
                     game_over_phase = 0 
 
-        # Fire unified render pass
         if running:
             current_fog_density = render_frame(
                 menu, camera, skybox, house, config_visual, setting_doors, 
                 door_materials, dt, clock, debug_state, game_time, 
                 house_display_list, static_colliders, current_fog_density, audio,
-                setting_inspectables, inspected_object, safe_ui
+                setting_inspectables, inspected_object, safe_ui, portfolio_ui
             )
         
         pygame.event.pump()
 
-    # Triggered post-loop prior to closing handles
     save_settings(camera, menu)
     pygame.quit()
 
